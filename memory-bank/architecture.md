@@ -8,14 +8,14 @@
 
 ## 当前状态
 
-**阶段一 · 步骤 1.5 完成后**：Spring Boot 4.0.7（Java 21）工程已引入全套核心依赖，数据源已配置可连库启动（Tomcat 8080，HikariCP → `vcs_dev`），并已具备**统一响应 `Result<T>` 与全局异常处理**（`common/` + `exception/`）。仍无建表脚本（`db/migration` 待阶段二）、无 Swagger（待 1.6）、无业务实体/接口。
+**阶段一 · 步骤 1.6 完成后**：Spring Boot 4.0.7（Java 21）工程已引入全套核心依赖，数据源已配置可连库启动（Tomcat 8080，HikariCP → `vcs_dev`），具备统一响应 `Result<T>` 与全局异常处理，并接入 **SpringDoc/Swagger UI**（`/v3/api-docs`、`/swagger-ui`）。阶段一（骨架与基础设施）至此完成。仍无建表脚本（`db/migration` 待阶段二）、无业务实体/接口、无 SecurityConfig（默认全局 401，待鉴权阶段）。
 
 ## 技术基线（已定）
 
 - **构建**：Maven（Maven Wrapper 锁定，JVM 走 `JAVA_HOME` 的 JDK 21）。
 - **框架**：Spring Boot 4.0.7 / Spring Framework 7 线。
-- **已引入依赖**：`spring-boot-starter-web` / `-validation` / `-security`、`mybatis-plus-spring-boot4-starter` 3.5.16、`mysql-connector-j`、`flyway-core` + `flyway-mysql`、jjwt 0.12.7（api/impl/jackson）、MapStruct 1.6.3（+ lombok-mapstruct-binding）、Lombok、Hutool 5.8.35。
-- **待引入**：SpringDoc（步骤 1.6 定版）、MinIO 8.5.14（阶段八，含 SB4 兼容性预案）。详见 `implementation_plan.md` 步骤 1.2 清单。
+- **已引入依赖**：`spring-boot-starter-web` / `-validation` / `-security`、`mybatis-plus-spring-boot4-starter` 3.5.16、`mysql-connector-j`、`flyway-core` + `flyway-mysql`、jjwt 0.12.7（api/impl/jackson）、MapStruct 1.6.3（+ lombok-mapstruct-binding）、Lombok、Hutool 5.8.35、**SpringDoc `springdoc-openapi-starter-webmvc-ui` 3.0.3（SB4 线）**。
+- **待引入**：MinIO 8.5.14（阶段八，含 SB4 兼容性预案）。详见 `implementation_plan.md` 步骤 1.2 清单。
 
 ## 目录与文件职责
 
@@ -51,6 +51,8 @@
 - **当前启动会因缺数据源而失败**：引入 web + jdbc 自动配置后，未配 `spring.datasource.url` 时应用启动报错，属预期；数据源配置见步骤 1.4。配好后应用将常驻监听 8080。
 - **annotation processor 顺序**：Lombok 与 MapStruct 同用时，processor 声明顺序为 lombok → mapstruct-processor → lombok-mapstruct-binding，错序会导致 MapStruct 读不到 Lombok 生成的 getter/setter、映射丢字段。
 - **Spring Boot 4 切片测试变更**：`@WebMvcTest`/`@DataJpaTest` 等 slice 注解已移出核心 `spring-boot-test-autoconfigure` jar（仅剩 jdbc/json）。Controller 单测优先用 `MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(handler)`——不启 Spring 上下文/Security/DB，最轻量、最稳。
+- **SpringDoc 版本线**：SB4 必须用 **SpringDoc 3.0.x**（2.8.x 是 SB3 线，装上会因 SB4 模块化不兼容）。Maven Central 的搜索索引可能滞后（曾只显示到 2.8.6），版本存在性以直接探 `repo1.maven.org` 的 pom HTTP 200 为准。
+- **SpringDoc 端点被 Security 拦截**：无 SecurityConfig 时 Spring Security 默认对所有请求返回 401，含 `/v3/api-docs`、`/swagger-ui/**`。鉴权阶段配置 SecurityConfig 时须对这些路径 permitAll，否则文档页打不开。
 
 ## 本地环境须知
 

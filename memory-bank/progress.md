@@ -118,3 +118,30 @@
 **尚未处理（留给步骤 1.6 起）**
 - SpringDoc/Swagger UI 集成（1.6，需实测 SB4 兼容版本）。
 - `db/migration` 目录与建表脚本（阶段二）。
+
+---
+
+### 步骤 1.6 — 集成 API 文档（SpringDoc/Swagger UI）✅（2026-07-02 完成）
+
+**做了什么**
+- `pom.xml` 加入 **`org.springdoc:springdoc-openapi-starter-webmvc-ui` 3.0.3**（版本号入 `<properties>` 的 `springdoc.version`）。无需任何 Java 配置，starter 自动装配 `/v3/api-docs` 与 `/swagger-ui`。
+
+**版本选型（关键 —— 回填步骤 1.2 的待验证项）**
+- SpringDoc **2.8.x 是 Spring Boot 3 线**，不能用于 SB4。SB4 对应的是 **SpringDoc 3.0.x**。
+- 已核实 `springdoc-openapi:3.0.3` 的父 POM 为 `spring-boot-starter-parent:4.0.5`，且其 starter 依赖引用了 SB4 模块化后的新工件（`spring-boot-tomcat`、`spring-boot-web-server`、`spring-boot-starter-webmvc-test`、`spring-boot-health`）——确认是 SB4/Spring 7 线，与本项目 SB 4.0.7 兼容。
+- （注意：Maven Central 的 solr 搜索索引一度只显示到 2.8.6，属索引滞后；直接探 `repo1.maven.org` 确认 3.0.0–3.0.3 的 pom 均 HTTP 200 存在。）
+
+**验证结果**
+- `./mvnw clean compile` → BUILD SUCCESS。
+- `./mvnw spring-boot:run` 启动，日志出现 `SpringDocAppInitializer`：`/v3/api-docs` 与 `/swagger-ui.html` 默认启用。
+- 无凭据访问返回 **401**（Spring Security 默认全局拦截，尚无 SecurityConfig——属预期，放行规则待鉴权阶段）。用日志里的开发生成密码 `user:<pwd>` 认证后：
+  - `GET /v3/api-docs` → **200**，返回合法 `openapi:3.1.0` JSON（`paths` 当前为空，因还没有业务 Controller，符合预期）。
+  - `GET /swagger-ui/index.html` → **200**，`text/html`，Swagger UI 页面正常。
+- 验证后停止应用，端口 8080 已释放。
+
+**关键上下文 / 后续者须知**
+- **鉴权阶段须为 SpringDoc 端点放行**：`/v3/api-docs/**`、`/swagger-ui/**`、`/swagger-ui.html` 需在 SecurityConfig 里 permitAll（或按环境控制），否则文档页被 401 挡住。
+- 生产可用 `springdoc.api-docs.enabled=false` / `springdoc.swagger-ui.enabled=false` 关闭（日志已提示）。
+
+**尚未处理（留给阶段二）**
+- `db/migration` 目录与 Flyway 建表脚本（步骤 2.1 起）。
