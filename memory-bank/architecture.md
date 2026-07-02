@@ -8,13 +8,13 @@
 
 ## 当前状态
 
-**阶段一 · 步骤 1.6 完成后**：Spring Boot 4.0.7（Java 21）工程已引入全套核心依赖，数据源已配置可连库启动（Tomcat 8080，HikariCP → `vcs_dev`），具备统一响应 `Result<T>` 与全局异常处理，并接入 **SpringDoc/Swagger UI**（`/v3/api-docs`、`/swagger-ui`）。阶段一（骨架与基础设施）至此完成。仍无建表脚本（`db/migration` 待阶段二）、无业务实体/接口、无 SecurityConfig（默认全局 401，待鉴权阶段）。
+**阶段二 · 步骤 2.1 完成后**：在阶段一基础上，**Flyway 迁移机制已打通并可连库**——应用启动时自动创建 `vcs_dev.flyway_schema_history`；迁移脚本目录 `src/main/resources/db/migration/` 已建（含命名规范 README，暂无 V 脚本）。仍无业务表（V1 起待 2.2）、无业务实体/接口、无 SecurityConfig（默认全局 401）。
 
 ## 技术基线（已定）
 
 - **构建**：Maven（Maven Wrapper 锁定，JVM 走 `JAVA_HOME` 的 JDK 21）。
 - **框架**：Spring Boot 4.0.7 / Spring Framework 7 线。
-- **已引入依赖**：`spring-boot-starter-web` / `-validation` / `-security`、`mybatis-plus-spring-boot4-starter` 3.5.16、`mysql-connector-j`、`flyway-core` + `flyway-mysql`、jjwt 0.12.7（api/impl/jackson）、MapStruct 1.6.3（+ lombok-mapstruct-binding）、Lombok、Hutool 5.8.35、**SpringDoc `springdoc-openapi-starter-webmvc-ui` 3.0.3（SB4 线）**。
+- **已引入依赖**：`spring-boot-starter-web` / `-validation` / `-security`、`mybatis-plus-spring-boot4-starter` 3.5.16、`mysql-connector-j`、**`spring-boot-starter-flyway`**（带 `spring-boot-flyway` 自动配置）+ `flyway-mysql`（`flyway-core` 由其传递引入）、jjwt 0.12.7（api/impl/jackson）、MapStruct 1.6.3（+ lombok-mapstruct-binding）、Lombok、Hutool 5.8.35、SpringDoc `springdoc-openapi-starter-webmvc-ui` 3.0.3（SB4 线）。
 - **待引入**：MinIO 8.5.14（阶段八，含 SB4 兼容性预案）。详见 `implementation_plan.md` 步骤 1.2 清单。
 
 ## 目录与文件职责
@@ -35,6 +35,7 @@
 - **`src/main/java/.../exception/`** — 异常层。
   - **`BusinessException`** — 业务异常，携带 `ResultCode`。Service 层抛它来表达可预期的业务错误。
   - **`GlobalExceptionHandler`** — `@RestControllerAdvice` 全局兜底：业务异常→自带码；`@Valid` 校验失败→400 + VALIDATION_ERROR；其他未预期异常→500 + INTERNAL_ERROR（记日志，不泄露堆栈给客户端）。
+- **`src/main/resources/db/migration/`** — Flyway 版本化迁移脚本目录（`classpath:db/migration`）。`README.md` 记命名规范 `V<n>__<desc>.sql`（从 V1 起）与建表约定（§3.2：统一 id/时间戳/created_by、软删除表加 deleted、JSON 列、无物理外键）。应用启动时 `spring-boot-starter-flyway` 自动执行；当前尚无 V 脚本，只有 history 表被建。
 - **`src/test/java/com/example/version_control_system/VersionControlSystemApplicationTests.java`** — 默认 context 加载测试（`@SpringBootTest` 的空 `contextLoads`）。步骤 1.1 验证即依赖它通过。
 
 ### 文档 / 记忆库（`memory-bank/` 与根目录）
@@ -48,8 +49,9 @@
 ## 关键洞察（供后续者）
 
 - **JDK 版本陷阱**：`PATH` 的 `java` 是 JDK 17，`JAVA_HOME` 是 JDK 21。构建必须走 21（Maven Wrapper 已保证）。用 `./mvnw -v` 核实。
-- **当前启动会因缺数据源而失败**：引入 web + jdbc 自动配置后，未配 `spring.datasource.url` 时应用启动报错，属预期；数据源配置见步骤 1.4。配好后应用将常驻监听 8080。
 - **annotation processor 顺序**：Lombok 与 MapStruct 同用时，processor 声明顺序为 lombok → mapstruct-processor → lombok-mapstruct-binding，错序会导致 MapStruct 读不到 Lombok 生成的 getter/setter、映射丢字段。
+- **Spring Boot 4「自动配置模块化」是反复踩的坑**：SB4 把许多原本在核心 `spring-boot-autoconfigure` jar 里的自动配置拆成了独立模块（web→`spring-boot-web-server`、tomcat→`spring-boot-tomcat`、flyway→`spring-boot-flyway`……）。**只加底层库（如 `flyway-core`）不会触发自动配置，且往往静默无报错**——组件就是不生效。规律：用对应的 `spring-boot-starter-xxx`（它会带上 `spring-boot-xxx` 自动配置模块），底层库版本仍可显式声明以锁版本。
+- **`characterEncoding` 用 Java charset 名 `UTF-8`，不是 `utf8mb4`**：Connector/J 的该参数要 Java 字符集名；写 MySQL 排序集名 `utf8mb4` 会在**首次真正开连接时**报 `Unsupported character encoding 'utf8mb4'`。因 HikariCP 懒开连接，此类错误常拖到启动期第一个取连接的组件（如 Flyway）才暴露。
 - **Spring Boot 4 切片测试变更**：`@WebMvcTest`/`@DataJpaTest` 等 slice 注解已移出核心 `spring-boot-test-autoconfigure` jar（仅剩 jdbc/json）。Controller 单测优先用 `MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(handler)`——不启 Spring 上下文/Security/DB，最轻量、最稳。
 - **SpringDoc 版本线**：SB4 必须用 **SpringDoc 3.0.x**（2.8.x 是 SB3 线，装上会因 SB4 模块化不兼容）。Maven Central 的搜索索引可能滞后（曾只显示到 2.8.6），版本存在性以直接探 `repo1.maven.org` 的 pom HTTP 200 为准。
 - **SpringDoc 端点被 Security 拦截**：无 SecurityConfig 时 Spring Security 默认对所有请求返回 401，含 `/v3/api-docs`、`/swagger-ui/**`。鉴权阶段配置 SecurityConfig 时须对这些路径 permitAll，否则文档页打不开。

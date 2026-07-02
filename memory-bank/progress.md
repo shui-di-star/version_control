@@ -145,3 +145,31 @@
 
 **尚未处理（留给阶段二）**
 - `db/migration` 目录与 Flyway 建表脚本（步骤 2.1 起）。
+
+---
+
+## 阶段二：数据库建表（Flyway）
+
+### 步骤 2.1 — Flyway 基线与迁移目录 ✅（2026-07-02 完成）
+
+**做了什么**
+- 建目录 `src/main/resources/db/migration/`，加 `README.md` 明确版本化脚本命名规范 `V<n>__<desc>.sql`（从 V1 起，双下划线分隔）与建表约定（见 design-document §3.2）。
+- **改依赖**（`pom.xml`）：把裸 `flyway-core` 换成 **`spring-boot-starter-flyway`**（保留 `flyway-mysql`，`flyway-core` 由其传递引入）。
+- **改配置**：修正数据源 URL 的 `characterEncoding=utf8mb4` → **`UTF-8`**。
+
+**两个关键坑（SB4 相关，后续者务必知道）**
+1. **Flyway 自动配置在 SB4 被拆成独立模块 `spring-boot-flyway`**：SB3 时代 `FlywayAutoConfiguration` 在核心 `spring-boot-autoconfigure` jar 里，光加 `flyway-core` 就能自动迁移；SB4 把它挪到了 `spring-boot-flyway` 模块。**只加 `flyway-core` 会静默不生效**——应用照常启动、零 Flyway 日志、不建任何表（本步初次实测正是这个现象）。解法：用 `spring-boot-starter-flyway`（它带 `spring-boot-flyway` + jdbc），业务库脚本用的 `flyway-mysql`/`flyway-core` 仍显式声明以锁版本。这与 1.6 发现的 SB4「自动配置模块化」是同一模式（web→spring-boot-web-server、tomcat→spring-boot-tomcat）。
+2. **`characterEncoding` 必须是 Java charset 名 `UTF-8`，不是 MySQL 排序集名 `utf8mb4`**：之前 1.4/1.6 用 `utf8mb4` 没报错，是因为 HikariCP 懒开连接、启动时没人真正取连接；**Flyway 是第一个在启动期主动开连接的组件**，才暴露 `Unsupported character encoding 'utf8mb4'`。Connector/J 8.x 用 `UTF-8` 即会在服务端协商 utf8mb4，无需写 `utf8mb4`。
+
+**验证结果**
+- `./mvnw spring-boot:run`：Flyway 日志出现 `Database: ... (MySQL 8.0)` → `Creating Schema History table vcs_dev.flyway_schema_history` → `Successfully validated 0 migrations` → `Schema up to date. No migration necessary`；应用正常启动。
+- 连库 `SHOW TABLES` 确认 `flyway_schema_history` 已创建（history 行为空，因当前无迁移脚本，符合预期）。
+- `./mvnw test` → BUILD SUCCESS（context 测试现也会跑 Flyway）。
+- 验证后停应用，端口释放。
+
+**关键上下文 / 后续者须知**
+- 空迁移目录 + `baseline-on-migrate=true`：Flyway 日志会说 "All configured schemas are empty; baseline operation skipped"——**空库不会写 baseline 行**，只建 history 表。等有了 V1 脚本，首次迁移才会真正记录。
+- 命名规范与建表约定见 `db/migration/README.md`。
+
+**尚未处理（留给步骤 2.2 起）**
+- 编写 V1 起的建表脚本：用户/项目表（2.2）、模板表（2.3）、实体表（2.4）、关系/产出物/日志表（2.5）。

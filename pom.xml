@@ -68,10 +68,11 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Flyway (core + MySQL module) -->
+        <!-- Flyway (Spring Boot 4 split its auto-config into spring-boot-flyway;
+             the starter pulls that module + flyway-core; flyway-mysql adds MySQL 8 support) -->
         <dependency>
-            <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-core</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-flyway</artifactId>
         </dependency>
         <dependency>
             <groupId>org.flywaydb</groupId>
