@@ -8,7 +8,7 @@
 
 ## 当前状态
 
-**阶段一 · 步骤 1.3 完成后**：Spring Boot 4.0.7（Java 21）工程已引入全套核心依赖（web、security、validation、MyBatis-Plus、Flyway、jjwt、MapStruct、Lombok、Hutool），可编译、依赖树无冲突。已具备内嵌 web 容器，但**尚未配置数据源**，故当前直接启动会失败（属预期，待步骤 1.4）。仍无业务代码、无建表脚本。
+**阶段一 · 步骤 1.4 完成后**：Spring Boot 4.0.7（Java 21）工程已引入全套核心依赖，且**数据源已配置并验证可连库启动**——Tomcat 监听 8080，HikariCP 连接本机 MySQL 的 `vcs_dev` 库。仍无业务代码、无建表脚本（`db/migration` 待阶段二）、无统一响应/异常处理（待 1.5）、无 Swagger（待 1.6）。
 
 ## 技术基线（已定）
 
@@ -28,7 +28,7 @@
 ### 应用源码
 - **`src/main/java/com/example/version_control_system/VersionControlSystemApplication.java`** — Spring Boot 启动类（`@SpringBootApplication` + `main`）。当前工程的唯一业务源文件。
   - 注意：实际包名是 `com.example.version_control_system`（IDE 生成），与 design-document §2.3 里建议的 `com.sim.versionmgr` 不同。以磁盘实际为准，改名需先与用户确认。
-- **`src/main/resources/application.properties`** — 应用配置。当前仅 `spring.application.name`。计划步骤 1.4 会在此（或迁移到 yml）加入数据库、MinIO、JWT、上传大小等配置。
+- **`src/main/resources/application.properties`** — 应用配置。含数据源（指向 `vcs_dev`，凭据走 `${DB_*}` 环境变量占位、默认 root/root）、Flyway（`classpath:db/migration`）、MyBatis-Plus（驼峰映射、逻辑删除 `deleted`）、上传上限 100MB、JWT（`app.jwt.*`）、MinIO 占位（`app.minio.*`，阶段八启用）。敏感值均支持环境变量覆盖。
 - **`src/test/java/com/example/version_control_system/VersionControlSystemApplicationTests.java`** — 默认 context 加载测试（`@SpringBootTest` 的空 `contextLoads`）。步骤 1.1 验证即依赖它通过。
 
 ### 文档 / 记忆库（`memory-bank/` 与根目录）
@@ -44,4 +44,10 @@
 - **JDK 版本陷阱**：`PATH` 的 `java` 是 JDK 17，`JAVA_HOME` 是 JDK 21。构建必须走 21（Maven Wrapper 已保证）。用 `./mvnw -v` 核实。
 - **当前启动会因缺数据源而失败**：引入 web + jdbc 自动配置后，未配 `spring.datasource.url` 时应用启动报错，属预期；数据源配置见步骤 1.4。配好后应用将常驻监听 8080。
 - **annotation processor 顺序**：Lombok 与 MapStruct 同用时，processor 声明顺序为 lombok → mapstruct-processor → lombok-mapstruct-binding，错序会导致 MapStruct 读不到 Lombok 生成的 getter/setter、映射丢字段。
+
+## 本地环境须知
+
+- **MySQL**：本机 8.0.45，Windows 服务名 `mysql`（启动类型 Automatic，但常处于 Stopped）。开发前先启动：`powershell Start-Service mysql`（需管理员）。数据库：`vcs_dev`（开发）、`vcs_test`（测试，决策 7），均 utf8mb4。root/root。
+- **mysql CLI 不在 PATH**：客户端绝对路径 `D:\software\Mysql\mysql-8.0.45-winx64\bin\mysql`（环境变量 `MYSQL_HOME` 指向安装目录）。
+- **应用端口**：8080。
 - **分层与红线**：后续代码遵循 `Controller → Service(+impl) → Mapper`，并严守实施计划顶部的设计红线（单父树、仅 MySQL 8、JSON 动态属性、无 Docker、逻辑外键等）。

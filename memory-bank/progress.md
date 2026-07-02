@@ -66,3 +66,32 @@
 
 **尚未处理（留给步骤 1.4）**
 - 配置数据源（MySQL 连接）、MinIO、JWT 密钥/过期、上传大小上限；敏感值走环境变量占位。配好后验证应用完整启动。
+
+---
+
+### 步骤 1.4 — 配置文件与环境分离 ✅（2026-07-02 完成）
+
+**做了什么**
+- **建库**：本机 MySQL 8.0.45 上创建开发库 **`vcs_dev`** 与测试库 **`vcs_test`**（均 utf8mb4 / utf8mb4_0900_ai_ci）。测试库对应决策 7。
+- 重写 `src/main/resources/application.properties`：
+  - 数据源指向 `vcs_dev`，凭据/URL 走环境变量占位并带本地默认值：`${DB_URL:...}` / `${DB_USERNAME:root}` / `${DB_PASSWORD:root}`。
+  - Flyway：启用，`locations=classpath:db/migration`（目录待阶段二建脚本），`baseline-on-migrate=true`。
+  - MyBatis-Plus：下划线转驼峰、逻辑删除字段 `deleted`（1=删/0=正常）。
+  - 上传上限：单文件 & 单请求 100MB。
+  - JWT：`app.jwt.secret`（默认值仅开发用，生产必须用 `JWT_SECRET` 覆盖）、`app.jwt.expiration-ms` 默认 1 天。
+  - MinIO：`app.minio.*` 占位（阶段八才被读取，当前 SDK 未引入）。
+
+**验证结果**
+- `./mvnw spring-boot:run` → **Tomcat 监听 8080**，`Started ... in 0.971s`，HikariCP 连上 `vcs_dev`，Flyway 空迁移目录正常通过，无报错。
+- 缺配置的清晰报错行为在步骤 1.3 已验证（未配 url 时 Spring Boot 报 `Failed to configure a DataSource`）。
+- （日志末尾的 `exit code 143` 是 `timeout` 命令到点 SIGTERM 主动杀进程所致，非应用错误。）
+
+**关键上下文 / 后续者须知**
+- **MySQL 服务默认是 Stopped**：Windows 服务名为 `mysql`（启动类型 Automatic 但当时未运行）。开发前需先启动：`powershell Start-Service mysql`（需管理员）。
+- **mysql CLI 不在 PATH**：客户端在 `D:\software\Mysql\mysql-8.0.45-winx64\bin\mysql`（环境变量 `MYSQL_HOME` 指向此安装目录，但 `%MYSQL_HOME%\bin` 未生效展开）。用绝对路径调用。
+- 凭据（root/root）通过默认值内置于配置，**本地零环境变量即可启动**；生产/共享环境用 `DB_*`、`JWT_SECRET` 等环境变量覆盖。
+- 配置格式仍用 `.properties`（设计文档 §偏好 yml，但本步未强制切换，保持最小变更）。
+
+**尚未处理（留给步骤 1.5 起）**
+- 统一响应 `Result<T>` 与全局异常处理（1.5）、Swagger（1.6）。
+- `db/migration` 目录与建表脚本（阶段二）。
