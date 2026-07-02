@@ -46,6 +46,18 @@
 - **指令**：核对 `pom.xml` 中 Spring Boot 版本与设计文档假设（3.x）的差异，与用户确认最终采用的 Spring Boot 主版本；据此确定 MyBatis-Plus、Flyway、jjwt、MinIO SDK、MapStruct、Lombok、Hutool、SpringDoc 各依赖的兼容版本。**在版本未与用户确认前，不要批量引入依赖。**
 - **验证**：产出一份「依赖-版本」清单并获得用户确认；`./mvnw dependency:tree` 无版本冲突告警。
 
+> **已确认清单（2026-07-02）** — 策略：能被 Spring Boot 4.0.7 BOM 托管的**不写死版本**（跟随 BOM），仅对下列非 BOM 依赖显式指定。
+>
+> BOM 托管（不写版本）：`spring-boot-starter-web`、`spring-boot-starter-validation`、`spring-boot-starter-security`、`flyway-core`、`flyway-mysql`、`mysql-connector-j`、`lombok`、`spring-boot-starter-test`。
+>
+> 显式指定版本：
+> - `com.baomidou:mybatis-plus-spring-boot4-starter` = **3.5.16**（必须用 spring-boot4 变体，非普通 starter）
+> - `io.jsonwebtoken:jjwt-api` / `jjwt-impl`(runtime) / `jjwt-jackson`(runtime) = **0.12.7**
+> - `org.mapstruct:mapstruct` + processor = **1.6.3**（与 Lombok 同用需加 `lombok-mapstruct-binding`，注意 annotation processor 顺序）
+> - `cn.hutool:hutool-all` = **5.8.35**
+> - `org.springdoc:springdoc-openapi-starter-webmvc-ui` = **待步骤 1.6 实测确认**（SpringDoc 对 SB4 支持较新）
+> - `io.minio:minio` = **8.5.14**，**待阶段八实测兼容性**；若与 SB4 的 OkHttp 冲突，改用 S3 兼容 SDK（已获用户同意此预案）。
+
 ### 步骤 1.3 — 引入核心依赖
 - **指令**：按已确认清单，将 MyBatis-Plus、MySQL 驱动、Flyway、Spring Security、jjwt、Hibernate Validator、Lombok、MapStruct、Hutool、SpringDoc 依赖加入构建。
 - **验证**：`./mvnw clean compile` 成功；应用仍能启动（此时数据库相关可暂用占位配置）。
