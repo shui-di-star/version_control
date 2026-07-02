@@ -95,3 +95,26 @@
 **尚未处理（留给步骤 1.5 起）**
 - 统一响应 `Result<T>` 与全局异常处理（1.5）、Swagger（1.6）。
 - `db/migration` 目录与建表脚本（阶段二）。
+
+---
+
+### 步骤 1.5 — 统一响应 Result<T> 与全局异常处理 ✅（2026-07-02 完成）
+
+**做了什么**（新增 4 个生产类）
+- `common/ResultCode.java`：错误码枚举。SUCCESS(0)；客户端类 1000 段（BAD_REQUEST 1000 / VALIDATION_ERROR 1001 / INTERNAL_ERROR 1002）；鉴权类 2000 段（UNAUTHORIZED 2000 / FORBIDDEN 2001）；资源/业务类 3000 段（NOT_FOUND 3000 / CONFLICT 3001 / BUSINESS_ERROR 3002）。每项带 `code` + `message`。
+- `common/Result<T>`：统一响应体 `{code, message, data}`。静态工厂 `success(T)` / `success()` / `error(ResultCode)` / `error(ResultCode, String)` / `error(int, String)`。
+- `exception/BusinessException`：`RuntimeException`，携带 `ResultCode`；构造器 `(ResultCode)` 与 `(ResultCode, message)`。
+- `exception/GlobalExceptionHandler`：`@RestControllerAdvice`。`handleBusiness` 用异常自带码返回；`handleValidation`（`MethodArgumentNotValidException`，HTTP 400）拼接字段错误 → VALIDATION_ERROR；`handleUnexpected`（兜底 Exception，HTTP 500）记 error 日志并返回 INTERNAL_ERROR，**不向客户端泄露堆栈**。
+
+**验证结果**
+- 编写临时探针 `ProbeController`（`/api/_probe/ok` 返回 `Result.success("pong")`；`/api/_probe/boom` 抛业务异常）+ `ProbeControllerTest`。
+- 两条用例通过：正常路径断言 code=0/message=成功/data=pong；业务异常断言 code=3002/message=探针触发的业务异常/data 不存在。
+- **验证后已按计划移除临时探针**（删除 `probe/ProbeController.java`、`probe/ProbeControllerTest.java` 及空目录）。移除后 `./mvnw test` 仅剩默认 context 测试，BUILD SUCCESS。
+
+**关键上下文 / 后续者须知**
+- **Spring Boot 4 破坏性变更**：`@WebMvcTest` 等 slice 测试注解已从核心 `spring-boot-test-autoconfigure` jar 中移出（该 jar 现仅剩 jdbc/json slice，无 `web.servlet` 包）。切片测试改用独立模块，或如本步用 **`MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(handler)`** 独立装配——不加载 Spring 上下文 / Security / DB，最轻量。后续写 Controller 单测优先用 standaloneSetup。
+- 探针类为一次性验证工具，已删除；`Result` / `ResultCode` / `BusinessException` / `GlobalExceptionHandler` 为长期生产代码。
+
+**尚未处理（留给步骤 1.6 起）**
+- SpringDoc/Swagger UI 集成（1.6，需实测 SB4 兼容版本）。
+- `db/migration` 目录与建表脚本（阶段二）。

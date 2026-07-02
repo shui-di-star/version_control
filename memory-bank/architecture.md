@@ -8,7 +8,7 @@
 
 ## 当前状态
 
-**阶段一 · 步骤 1.4 完成后**：Spring Boot 4.0.7（Java 21）工程已引入全套核心依赖，且**数据源已配置并验证可连库启动**——Tomcat 监听 8080，HikariCP 连接本机 MySQL 的 `vcs_dev` 库。仍无业务代码、无建表脚本（`db/migration` 待阶段二）、无统一响应/异常处理（待 1.5）、无 Swagger（待 1.6）。
+**阶段一 · 步骤 1.5 完成后**：Spring Boot 4.0.7（Java 21）工程已引入全套核心依赖，数据源已配置可连库启动（Tomcat 8080，HikariCP → `vcs_dev`），并已具备**统一响应 `Result<T>` 与全局异常处理**（`common/` + `exception/`）。仍无建表脚本（`db/migration` 待阶段二）、无 Swagger（待 1.6）、无业务实体/接口。
 
 ## 技术基线（已定）
 
@@ -29,6 +29,12 @@
 - **`src/main/java/com/example/version_control_system/VersionControlSystemApplication.java`** — Spring Boot 启动类（`@SpringBootApplication` + `main`）。当前工程的唯一业务源文件。
   - 注意：实际包名是 `com.example.version_control_system`（IDE 生成），与 design-document §2.3 里建议的 `com.sim.versionmgr` 不同。以磁盘实际为准，改名需先与用户确认。
 - **`src/main/resources/application.properties`** — 应用配置。含数据源（指向 `vcs_dev`，凭据走 `${DB_*}` 环境变量占位、默认 root/root）、Flyway（`classpath:db/migration`）、MyBatis-Plus（驼峰映射、逻辑删除 `deleted`）、上传上限 100MB、JWT（`app.jwt.*`）、MinIO 占位（`app.minio.*`，阶段八启用）。敏感值均支持环境变量覆盖。
+- **`src/main/java/.../common/`** — 统一响应层。
+  - **`Result<T>`** — 统一响应体 `{code, message, data}`；静态工厂 `success`/`error` 系列。所有 Controller 返回值都应包成 `Result`。
+  - **`ResultCode`** — 错误码枚举，分段：0 成功；1000 段客户端/系统；2000 段鉴权；3000 段资源/业务。新增错误码在对应段内追加。
+- **`src/main/java/.../exception/`** — 异常层。
+  - **`BusinessException`** — 业务异常，携带 `ResultCode`。Service 层抛它来表达可预期的业务错误。
+  - **`GlobalExceptionHandler`** — `@RestControllerAdvice` 全局兜底：业务异常→自带码；`@Valid` 校验失败→400 + VALIDATION_ERROR；其他未预期异常→500 + INTERNAL_ERROR（记日志，不泄露堆栈给客户端）。
 - **`src/test/java/com/example/version_control_system/VersionControlSystemApplicationTests.java`** — 默认 context 加载测试（`@SpringBootTest` 的空 `contextLoads`）。步骤 1.1 验证即依赖它通过。
 
 ### 文档 / 记忆库（`memory-bank/` 与根目录）
@@ -44,6 +50,7 @@
 - **JDK 版本陷阱**：`PATH` 的 `java` 是 JDK 17，`JAVA_HOME` 是 JDK 21。构建必须走 21（Maven Wrapper 已保证）。用 `./mvnw -v` 核实。
 - **当前启动会因缺数据源而失败**：引入 web + jdbc 自动配置后，未配 `spring.datasource.url` 时应用启动报错，属预期；数据源配置见步骤 1.4。配好后应用将常驻监听 8080。
 - **annotation processor 顺序**：Lombok 与 MapStruct 同用时，processor 声明顺序为 lombok → mapstruct-processor → lombok-mapstruct-binding，错序会导致 MapStruct 读不到 Lombok 生成的 getter/setter、映射丢字段。
+- **Spring Boot 4 切片测试变更**：`@WebMvcTest`/`@DataJpaTest` 等 slice 注解已移出核心 `spring-boot-test-autoconfigure` jar（仅剩 jdbc/json）。Controller 单测优先用 `MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(handler)`——不启 Spring 上下文/Security/DB，最轻量、最稳。
 
 ## 本地环境须知
 
