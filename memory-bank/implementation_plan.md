@@ -19,6 +19,23 @@
 
 ---
 
+## 已确认前置决策（开发唯一依据）
+
+> 以下为 2026-07-02 讨论确认的补充决策，优先级高于设计文档中的模糊/矛盾表述。开发时以本节为准。
+
+1. **Spring Boot 版本**：采用 **4.0.7**（`pom.xml` 现值）。所有依赖（MyBatis-Plus、jjwt、SpringDoc、MinIO SDK 等）按 Spring Boot 4 / Spring Framework 7 兼容线选版本。设计文档 §2.2 中"用 3.x"的表述作废。
+2. **主键策略**：全表用**雪花 id**（MyBatis-Plus `IdType.ASSIGN_ID`，`BIGINT`）。理由：导入功能可在插入前预生成全部新 id，一次性重建父子/关系引用，无需依赖自增回填顺序。设计文档 §3.2"雪花/自增"二选一在此定为雪花。
+3. **实体状态枚举**：仅 `RECOMMENDED / DEPRECATED / SIMULATING`（互斥单选，可空）。统计口径中的**"已完成仿真"= RECOMMENDED 数 + DEPRECATED 数**，不新增 COMPLETED 枚举值。
+4. **统计口径**：**所有实体均计为"方案节点"**（不按模板类型筛选）。"NUMBER 属性最大值"针对**指定字段**——`GET /api/projects/{pid}/stats` 需接受一个字段 key 参数（如 `numberFieldKey`），后端用 MySQL JSON 提取该 key 后求最大值。
+5. **注册开放**：`/api/auth/register` 面向所有人**自助注册**，无需 SuperAdmin 审批。
+6. **后端登出**：`t_user` 增加一列 `token_invalid_before`（时间戳/DATETIME）。登出时置为当前时间；JWT 过滤器校验时，若 token 的签发时间（iat）早于该列值则判为失效并拒绝。**语义为"登出该用户全部会话"**（按用户维度失效，非单设备）。JWT 载荷需含签发时间 iat 以支持比对。
+7. **集成测试数据库**：**不使用 Docker/Testcontainers**（用户暂不装 Docker）。改用**本地专用测试库**：在本机 MySQL 8.0.45 上单独建一个库（如 `vcs_test`，与开发库隔离，勿混用），测试连接它、每次跑测试前用 Flyway 重建 schema。因大量使用 `WITH RECURSIVE` 与 `json`，H2 内存库不可用，故必须连真 MySQL。阶段一不依赖数据库可先做；阶段二起的连库测试指向 `vcs_test`。
+8. **MinIO 部署方式**：本地开发用 **MinIO 原生 Windows 可执行程序**启动本地服务，**不用 Docker**。（阶段八产出物存储用到，此处澄清以免误以为需要 Docker。）
+9. **外键策略**：**不建物理外键，用逻辑外键 + 应用层（Service）校验**。理由：与软删除（`deleted`）冲突，且 MyBatis-Plus 生态惯例。凡计划中"应被外键约束拒绝"的验证，一律改为"应被 Service 层校验拒绝"。
+10. **FILE 属性类型**：`field_schema` 中 type=FILE 的字段，其在 `t_entity.attributes` 里的**值为一个 asset id**，指向该实体自身在 `t_asset` 中的一条产出物记录（即"从本实体已上传的产出物中挑一个绑定到该字段"）。校验 attributes 时需确认该 asset id 存在且属于当前实体。
+
+---
+
 ## 阶段一：项目骨架与基础设施
 
 ### 步骤 1.1 — 确认构建与运行基线
@@ -56,7 +73,7 @@
 - **验证**：应用启动时 Flyway 自动执行迁移；`flyway_schema_history` 表被创建且记录 baseline。
 
 ### 步骤 2.2 — 用户与项目表
-- **指令**：编写迁移脚本创建 `t_user`（含 `system_role` SUPER_ADMIN/USER、`status`）、`t_project`（含 `owner_id`）、`t_project_member`（含 `role` ADMIN/EDITOR/VIEWER，`(project_id, user_id)` 唯一索引）。
+- **指令**：编写迁移脚本创建 `t_user`（含 `system_role` SUPER_ADMIN/USER、`status`、以及登出用的 `token_invalid_before` DATETIME 可空，见决策 6）、`t_project`（含 `owner_id`）、`t_project_member`（含 `role` ADMIN/EDITOR/VIEWER，`(project_id, user_id)` 唯一索引）。
 - **验证**：迁移执行成功；连库检查三张表结构、字段类型、唯一索引与设计文档 §3.2 一致；重复插入同一 `(project_id, user_id)` 应被唯一索引拒绝。
 
 ### 步骤 2.3 — 模板表
@@ -65,7 +82,7 @@
 
 ### 步骤 2.4 — 实体表（单父树核心）
 - **指令**：编写迁移脚本创建 `t_entity`，含 `parent_id`(NULL 表示根，外键指向自身 `id`)、`template_id`、`status`(RECOMMENDED/DEPRECATED/SIMULATING/空)、`is_milestone`、`remark`、`attributes` JSON；建立 `(project_id, parent_id)` 索引。
-- **验证**：迁移成功；能插入 `parent_id IS NULL` 的根节点与引用父节点的子节点；插入指向不存在父节点的 `parent_id` 应被外键约束拒绝。
+- **验证**：迁移成功；能插入 `parent_id IS NULL` 的根节点与引用父节点的子节点。（注：按决策 9 不建物理外键，`parent_id` 合法性由 Service 层校验，见步骤 6.1，不在建表层约束。）
 
 ### 步骤 2.5 — 关系、产出物、日志表
 - **指令**：编写迁移脚本创建 `t_relation`（`from_entity_id`/`to_entity_id`/`template_id`/`remark`）、`t_asset`（`entity_id`/`asset_type`/`file_name`/`object_key`/`content_text`/`size`/`mime_type`）、`t_operation_log`（`action`/`target_type`/`target_id`/`detail` JSON）。
@@ -81,19 +98,19 @@
 
 ### 步骤 3.1 — 密码加密与用户注册
 - **指令**：实现用户注册，密码用 BCrypt 加密后存 `password_hash`；`username` 唯一；注册接口 `POST /api/auth/register` 公开。
-- **验证**：注册后数据库存储的是 BCrypt 哈希而非明文；重复 `username` 注册返回明确业务错误；测试覆盖成功注册与重名冲突两条路径。
+- **验证**：注册对所有人公开（决策 5）；注册后数据库存储的是 BCrypt 哈希而非明文；重复 `username` 注册返回明确业务错误；测试覆盖成功注册与重名冲突两条路径。
 
 ### 步骤 3.2 — 登录签发 JWT
-- **指令**：实现 `POST /api/auth/login`（公开），校验密码后签发含 `userId`、`username` 的 JWT；配置签名密钥与过期时间。
-- **验证**：正确凭据返回可解析的 JWT；错误密码/不存在用户返回统一鉴权失败错误；测试断言返回的 JWT 载荷含 `userId`、`username`。
+- **指令**：实现 `POST /api/auth/login`（公开），校验密码后签发含 `userId`、`username`、**签发时间 iat**（登出比对用，见决策 6）的 JWT；配置签名密钥与过期时间。
+- **验证**：正确凭据返回可解析的 JWT；错误密码/不存在用户返回统一鉴权失败错误；测试断言返回的 JWT 载荷含 `userId`、`username`、`iat`。
 
 ### 步骤 3.3 — JWT 认证过滤器
-- **指令**：实现 `JwtAuthenticationFilter` 解析 `Authorization: Bearer <JWT>`，填充 Spring Security 上下文；配置公开路径白名单（注册/登录/Swagger）与其余需认证。
-- **验证**：带合法 JWT 访问受保护接口通过；无 token 或过期/伪造 token 被拒（401）；公开路径无 token 可访问。测试覆盖这四种情形。
+- **指令**：实现 `JwtAuthenticationFilter` 解析 `Authorization: Bearer <JWT>`，填充 Spring Security 上下文；校验 token 签发时间 iat 是否早于该用户 `token_invalid_before`（早于则判为已登出/失效，见决策 6）；配置公开路径白名单（注册/登录/Swagger）与其余需认证。
+- **验证**：带合法 JWT 访问受保护接口通过；无 token 或过期/伪造 token 被拒（401）；公开路径无 token 可访问；iat 早于 `token_invalid_before` 的 token 被拒。测试覆盖这五种情形。
 
 ### 步骤 3.4 — 当前用户与登出
-- **指令**：实现 `GET /api/auth/me`（返回当前用户信息）与 `POST /api/auth/logout`。
-- **验证**：`/api/auth/me` 携带合法 JWT 返回对应用户；未认证访问被拒。测试通过。
+- **指令**：实现 `GET /api/auth/me`（返回当前用户信息）与 `POST /api/auth/logout`（将当前用户 `token_invalid_before` 置为当前时间，使其已签发的 token 全部失效，见决策 6）。
+- **验证**：`/api/auth/me` 携带合法 JWT 返回对应用户；未认证访问被拒；调用 logout 后，登出前签发的 token 再访问受保护接口被拒（401）。测试通过。
 
 ### 步骤 3.5 — 项目级角色注解与切面
 - **指令**：实现自定义注解 `@RequireProjectRole(角色)` 与其切面：从路径 `{pid}` 或请求体解析 `projectId`；若当前用户 `system_role = SUPER_ADMIN` 直接放行，否则查 `t_project_member` 校验其角色 ≥ 要求角色（角色序：VIEWER < EDITOR < ADMIN）。
@@ -132,8 +149,8 @@
 ## 阶段六：实体 CRUD 与树查询
 
 ### 步骤 6.1 — 实体创建与属性校验
-- **指令**：实现实体创建 `POST /api/projects/{pid}/entities`（写:Editor+）：指定 `template_id`、`parent_id`（可空=根）、`name`、`attributes`。依据模板 `field_schema` 校验 `attributes`（必填字段、类型、ENUM 选项）。
-- **验证**：合法实体创建成功且 `attributes` 正确入库；缺必填字段或类型不符被拒；`parent_id` 指向非本项目实体被拒。测试覆盖各路径。
+- **指令**：实现实体创建 `POST /api/projects/{pid}/entities`（写:Editor+）：指定 `template_id`、`parent_id`（可空=根）、`name`、`attributes`。依据模板 `field_schema` 校验 `attributes`（必填字段、类型、ENUM 选项）；type=FILE 的字段其值须为一个 asset id 且该产出物属于当前实体（见决策 10）。`parent_id`、`template_id` 的合法性由 Service 层校验（决策 9，无物理外键）。
+- **验证**：合法实体创建成功且 `attributes` 正确入库；缺必填字段或类型不符被拒；`parent_id` 指向非本项目实体被 Service 层拒绝；FILE 字段值指向不存在或不属于本实体的 asset 被拒。测试覆盖各路径。
 
 ### 步骤 6.2 — 实体更新与删除策略
 - **指令**：实现实体更新（属性/名称/备注）与删除 `DELETE`（写:Editor+），删除接口接受 `childStrategy` 参数：
@@ -162,8 +179,8 @@
 - **验证**：合法语义关系创建成功；违反 `allowed_from`/`allowed_to` 约束被拒；两端实体跨项目被拒。测试确认 `t_relation` 中不含任何等价于 parent_id 的父子记录。
 
 ### 步骤 7.2 — 统计面板
-- **指令**：实现 `GET /api/projects/{pid}/stats`（成员）：返回方案节点总数、已完成/仿真中数量、推荐方案数量，以及对 NUMBER 类属性的聚合（如最大值，用 MySQL JSON 提取后聚合）。
-- **验证**：构造已知数据集，断言各统计项数值与手工计算一致，包括 NUMBER 属性最大值。测试通过。
+- **指令**：实现 `GET /api/projects/{pid}/stats`（成员）：返回方案节点总数（=项目内全部实体数，决策 4）、已完成仿真数量（=RECOMMENDED 数 + DEPRECATED 数，决策 3）、仿真中数量（SIMULATING）、推荐方案数量（RECOMMENDED）；并接受一个字段 key 参数（如 `numberFieldKey`），对该指定 NUMBER 属性用 MySQL JSON 提取后求最大值（决策 4）。
+- **验证**：构造已知数据集，断言各统计项数值与手工计算一致：全体计数、已完成=推荐+淘汰之和、指定字段的 NUMBER 最大值正确。测试通过。
 
 ---
 

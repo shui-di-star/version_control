@@ -31,6 +31,16 @@ These were finalized in requirements discussion. When touching data model, tree 
 - **Tree layout**: AntV G6 v5 with `compactBox` top-to-bottom. Node positions are **auto-laid-out and NOT persisted** — the PRD's "drag position auto-save" was cancelled. Do not add node-coordinate persistence.
 - **ORM**: MyBatis-Plus.
 
+Additional decisions confirmed during planning (see memory-bank/implementation_plan.md "已确认前置决策" for the full list — that section is the authoritative source):
+
+- **Spring Boot 4.0.7** is the target; pick dependency versions on the Spring Boot 4 / Spring Framework 7 compatibility line.
+- **Primary keys** use snowflake IDs (MyBatis-Plus `IdType.ASSIGN_ID`, `BIGINT`) on every table — lets the import feature pre-generate new IDs and rebuild references in one pass.
+- **No physical foreign keys**; referential integrity (`parent_id`, `template_id`, relation endpoints, etc.) is enforced in the Service layer. Reason: physical FKs conflict with soft-delete (`deleted`).
+- **No Docker.** Integration tests run against a dedicated local MySQL 8 database (e.g. `vcs_test`), rebuilt via Flyway before tests — H2 can't handle `WITH RECURSIVE` + `json`. MinIO runs as its native Windows executable, not a container.
+- **Backend logout** uses a `t_user.token_invalid_before` timestamp: logout sets it to now; the JWT filter rejects any token whose `iat` predates it (invalidates all of that user's sessions).
+- **Stats**: every entity counts as a "方案节点"; "已完成仿真" = RECOMMENDED + DEPRECATED counts; the max-value stat targets a caller-specified NUMBER field key.
+- **FILE-typed attributes** store an asset id pointing to one of the entity's own `t_asset` records.
+
 ## Architecture (planned — per memory-bank/design-document.md §2-5)
 
 Layered backend: **Controller → Service (+impl) → Mapper (MyBatis-Plus)**, with DTO/VO separated from Entity. Custom recursive-CTE SQL lives in Mappers. Cross-cutting: Spring Security + JWT, global exception handler, AOP operation logging.
@@ -50,7 +60,7 @@ REST APIs are under `/api`, return `Result<T> { code, message, data }`, and auth
 ## Discrepancies to be aware of
 
 - **Package name**: current code is `com.example.version_control_system`; the design doc uses `com.sim.versionmgr`. The existing package is what's actually on disk — confirm with the user before renaming.
-- **Spring Boot version**: `pom.xml` currently pins Spring Boot **4.0.7**; the design doc was written assuming 3.x (it noted 4.x wasn't GA at writing time). The pom is authoritative for what builds.
+- **Spring Boot version**: `pom.xml` pins Spring Boot **4.0.7** — this is confirmed as the target (the design doc's assumption of 3.x is superseded). Choose all dependency versions on the SB4 / Spring 7 line.
 - **Config format**: current file is `application.properties`; the design doc references `application.yml`.
 
 重要提示：
