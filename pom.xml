@@ -34,6 +34,7 @@
         <lombok-mapstruct-binding.version>0.2.0</lombok-mapstruct-binding.version>
         <hutool.version>5.8.35</hutool.version>
         <springdoc.version>3.0.3</springdoc.version>
+        <minio.version>8.5.14</minio.version>
     </properties>
     <dependencies>
         <!-- Web (embedded Tomcat) -->
@@ -52,6 +53,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- AOP (项目级角色切面 @RequireProjectRole)；SB4 中 AOP starter 更名为 aspectj -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aspectj</artifactId>
         </dependency>
 
         <!-- MyBatis-Plus (Spring Boot 4 variant) -->
@@ -126,9 +133,22 @@
             <version>${springdoc.version}</version>
         </dependency>
 
+        <!-- MinIO 对象存储（产出物，阶段八）。原生 Windows 服务，非 Docker（决策 8） -->
+        <dependency>
+            <groupId>io.minio</groupId>
+            <artifactId>minio</artifactId>
+            <version>${minio.version}</version>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- SB4 将 MockMvc 测试支持拆分到独立模块（org.springframework.boot.webmvc.test.autoconfigure），starter-test 不再包含 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc-test</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -144,6 +164,7 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
+                    <parameters>true</parameters>
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.projectlombok</groupId>

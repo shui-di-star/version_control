@@ -5,6 +5,7 @@ import com.example.version_control_system.common.ResultCode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -26,6 +27,18 @@ public class GlobalExceptionHandler {
     public Result<Void> handleBusiness(BusinessException ex) {
         log.warn("业务异常: code={}, message={}", ex.getResultCode().getCode(), ex.getMessage());
         return Result.error(ex.getResultCode(), ex.getMessage());
+    }
+
+    /**
+     * 项目级授权失败（{@code @RequireProjectRole} 切面抛出）。
+     * <p>切面在 DispatcherServlet 内抛出，先于 Security 的 ExceptionTranslationFilter 被此处捕获，
+     * 故在这里显式映射为 HTTP 403 + FORBIDDEN 错误体。</p>
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public Result<Void> handleAccessDenied(AccessDeniedException ex) {
+        log.warn("访问被拒: {}", ex.getMessage());
+        return Result.error(ResultCode.FORBIDDEN);
     }
 
     /** Bean Validation 校验失败（@Valid 请求体）。 */

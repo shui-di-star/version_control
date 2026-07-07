@@ -31,3 +31,20 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Claude Code ###
+.claude/
+memory-bank/
+CLAUDE.md
+
+### Frontend ###
+frontend/node_modules/
+
+### Temp report files ###
+FINAL_REPORT.txt
+IMPORT_EXPORT_SUMMARY.txt
+INDEX.md
+findings.txt
+
+### Videos ###
+video/
