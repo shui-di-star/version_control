@@ -6,16 +6,18 @@ import {
   Modal,
   Form,
   Input,
-  message,
+  App,
   Popconfirm,
 } from 'antd';
 import { entityTemplateApi } from '@/api/template';
 import { useProjectStore } from '@/stores/projectStore';
 import FieldSchemaEditor from '@/components/FieldSchemaEditor';
 import { parseSchemaFields } from '@/utils/json';
+import { DEFAULT_ENTITY_FIELDS } from '@/utils/constants';
 import type { EntityTemplateVO, SchemaField } from '@/types/api';
 
 export default function EntityTemplateTab() {
+  const { message } = App.useApp();
   const currentProject = useProjectStore((s) => s.currentProject);
   const isAdmin = useProjectStore((s) => s.hasRole('ADMIN'));
   const pid = currentProject?.id;
@@ -25,7 +27,7 @@ export default function EntityTemplateTab() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<EntityTemplateVO | null>(null);
   const [fields, setFields] = useState<SchemaField[]>([]);
-  const [form] = Form.useForm<{ name: string; icon?: string }>();
+  const [form] = Form.useForm<{ name: string }>();
 
   const reload = async () => {
     if (!pid) return;
@@ -45,13 +47,13 @@ export default function EntityTemplateTab() {
   const openCreate = () => {
     setEditing(null);
     form.resetFields();
-    setFields([]);
+    setFields(DEFAULT_ENTITY_FIELDS.map((f) => ({ ...f })));
     setOpen(true);
   };
 
   const openEdit = (t: EntityTemplateVO) => {
     setEditing(t);
-    form.setFieldsValue({ name: t.name, icon: t.icon });
+    form.setFieldsValue({ name: t.name });
     setFields(parseSchemaFields(t.fieldSchema));
     setOpen(true);
   };
@@ -70,7 +72,7 @@ export default function EntityTemplateTab() {
       }
     }
     const fieldSchema = JSON.stringify({ fields });
-    const payload = { name: values.name, icon: values.icon, fieldSchema };
+    const payload = { name: values.name, fieldSchema };
     if (editing) {
       await entityTemplateApi.update(pid, editing.id, payload);
       message.success('已更新');
@@ -94,7 +96,6 @@ export default function EntityTemplateTab() {
       title: '名称',
       dataIndex: 'name',
     },
-    { title: '图标', dataIndex: 'icon' },
     {
       title: '字段数',
       key: 'fields',
@@ -129,20 +130,15 @@ export default function EntityTemplateTab() {
       <Modal
         title={editing ? '编辑实体模板' : '新建实体模板'}
         open={open}
-        width={760}
+        width={1120}
         onOk={onSubmit}
         onCancel={() => setOpen(false)}
-        destroyOnHidden
+        forceRender
       >
         <Form form={form} layout="vertical">
-          <Space size="large" align="start">
-            <Form.Item name="name" label="模板名" rules={[{ required: true, max: 64 }]}>
-              <Input style={{ width: 220 }} />
-            </Form.Item>
-            <Form.Item name="icon" label="图标（可选）" rules={[{ max: 32 }]}>
-              <Input style={{ width: 160 }} placeholder="如 cube" />
-            </Form.Item>
-          </Space>
+          <Form.Item name="name" label="模板名" rules={[{ required: true, max: 64 }]}>
+            <Input style={{ width: 300 }} />
+          </Form.Item>
           <Form.Item label="动态字段 (field_schema)">
             <FieldSchemaEditor value={fields} onChange={setFields} />
           </Form.Item>

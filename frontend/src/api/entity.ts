@@ -1,4 +1,4 @@
-import { get, post, put, del } from './http';
+import { get, getSilent, post, put, del } from './http';
 import type {
   ChildStrategy,
   EntityCreateRequest,
@@ -10,6 +10,8 @@ import type {
 export const entityApi = {
   tree: (pid: string) => get<EntityTreeNode[]>(`/projects/${pid}/entities/tree`),
   get: (pid: string, id: string) => get<EntityVO>(`/projects/${pid}/entities/${id}`),
+  /** 静默获取实体详情，不弹错误 toast（用于面板加载，实体可能已被删除）。 */
+  getSilent: (pid: string, id: string) => getSilent<EntityVO>(`/projects/${pid}/entities/${id}`),
   create: (pid: string, req: EntityCreateRequest) =>
     post<EntityVO>(`/projects/${pid}/entities`, req),
   update: (pid: string, id: string, req: EntityUpdateRequest) =>

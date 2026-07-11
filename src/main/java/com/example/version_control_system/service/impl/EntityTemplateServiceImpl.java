@@ -24,6 +24,16 @@ public class EntityTemplateServiceImpl implements EntityTemplateService {
     private final SimEntityMapper entityMapper;
     private final JsonUtils jsonUtils;
 
+    /** 新建实体模板时的预设 field_schema（用户可自行修改）。 */
+    public static final String DEFAULT_FIELD_SCHEMA = """
+            {"fields":[
+              {"key":"card_name","label":"卡片名称","type":"TEXT","required":true,"showOnCard":true},
+              {"key":"time","label":"时间","type":"DATE","required":false,"showOnCard":false},
+              {"key":"owner","label":"负责人","type":"TEXT","required":false,"showOnCard":true},
+              {"key":"result_conclusion","label":"结果结论","type":"TEXT","required":false,"showOnCard":false},
+              {"key":"other_notes","label":"其他备注","type":"TEXT","required":false,"showOnCard":false}
+            ]}""";
+
     public EntityTemplateServiceImpl(EntityTemplateMapper templateMapper,
                                      SimEntityMapper entityMapper,
                                      JsonUtils jsonUtils) {
@@ -47,11 +57,15 @@ public class EntityTemplateServiceImpl implements EntityTemplateService {
     @Override
     @Transactional
     public EntityTemplateVO create(Long projectId, EntityTemplateRequest request) {
-        String normalized = normalizeSchema(request.fieldSchema());
+        // 如果前端未提供 fieldSchema，使用预设默认字段
+        String schema = request.fieldSchema();
+        if (schema == null || schema.isBlank()) {
+            schema = DEFAULT_FIELD_SCHEMA;
+        }
+        String normalized = normalizeSchema(schema);
         EntityTemplate template = new EntityTemplate();
         template.setProjectId(projectId);
         template.setName(request.name());
-        template.setIcon(request.icon());
         template.setFieldSchema(normalized);
         templateMapper.insert(template);
         return EntityTemplateVO.from(template);
@@ -63,7 +77,6 @@ public class EntityTemplateServiceImpl implements EntityTemplateService {
         EntityTemplate template = require(projectId, templateId);
         String normalized = normalizeSchema(request.fieldSchema());
         template.setName(request.name());
-        template.setIcon(request.icon());
         template.setFieldSchema(normalized);
         templateMapper.updateById(template);
         return EntityTemplateVO.from(template);

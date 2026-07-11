@@ -19,5 +19,10 @@ export default function SettingsPage() {
     items.push({ key: 'logs', label: '操作日志', children: <LogTab /> });
   }
 
-  return <Tabs items={items} />;
+  return (
+    <div className="theme-panel" style={{ padding: '16px 20px', maxWidth: 1100, margin: '0 auto', minHeight: 'calc(100vh - 80px)' }}>
+      <h2 style={{ margin: '0 0 12px', fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>项目设置</h2>
+      <Tabs items={items} />
+    </div>
+  );
 }

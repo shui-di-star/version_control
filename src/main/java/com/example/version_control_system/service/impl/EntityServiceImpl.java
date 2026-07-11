@@ -21,7 +21,9 @@ import com.example.version_control_system.mapper.EntityTemplateMapper;
 import com.example.version_control_system.mapper.RelationMapper;
 import com.example.version_control_system.mapper.RelationTemplateMapper;
 import com.example.version_control_system.mapper.SimEntityMapper;
+import com.example.version_control_system.service.AttrImageRefService;
 import com.example.version_control_system.service.EntityService;
+import com.example.version_control_system.service.StorageService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,19 +46,25 @@ public class EntityServiceImpl implements EntityService {
     private final RelationTemplateMapper relationTemplateMapper;
     private final AssetMapper assetMapper;
     private final AttributeValidator attributeValidator;
+    private final StorageService storageService;
+    private final AttrImageRefService attrImageRefService;
 
     public EntityServiceImpl(SimEntityMapper entityMapper,
                              EntityTemplateMapper templateMapper,
                              RelationMapper relationMapper,
                              RelationTemplateMapper relationTemplateMapper,
                              AssetMapper assetMapper,
-                             AttributeValidator attributeValidator) {
+                             AttributeValidator attributeValidator,
+                             StorageService storageService,
+                             AttrImageRefService attrImageRefService) {
         this.entityMapper = entityMapper;
         this.templateMapper = templateMapper;
         this.relationMapper = relationMapper;
         this.relationTemplateMapper = relationTemplateMapper;
         this.assetMapper = assetMapper;
         this.attributeValidator = attributeValidator;
+        this.storageService = storageService;
+        this.attrImageRefService = attrImageRefService;
     }
 
     @Override
@@ -87,6 +95,8 @@ public class EntityServiceImpl implements EntityService {
             entity.setParentRelationRemark(request.parentRelationRemark());
         }
         entityMapper.insert(entity);
+        // 复制卡片时 attributes 中可能已包含图片 key，需增加引用计数
+        addAttrImageRefs(projectId, attributes);
         return EntityVO.from(entity);
     }
 
@@ -136,11 +146,57 @@ public class EntityServiceImpl implements EntityService {
         entityMapper.deleteById(entity.getId());
     }
 
-    /** 删除给定实体 id 集合关联的语义关系（from/to 命中）与产出物。 */
+    /** 删除给定实体 id 集合关联的语义关系（from/to 命中）与产出物（含 MinIO 对象），以及属性图片。 */
     private void deleteRelationsAndAssets(List<Long> entityIds) {
         relationMapper.delete(new LambdaQueryWrapper<Relation>().in(Relation::getFromEntityId, entityIds));
         relationMapper.delete(new LambdaQueryWrapper<Relation>().in(Relation::getToEntityId, entityIds));
+        // 先查出所有 asset 的 objectKey，清理 MinIO 中的文件
+        List<Asset> assets = assetMapper.selectList(
+                new LambdaQueryWrapper<Asset>().in(Asset::getEntityId, entityIds));
+        for (Asset asset : assets) {
+            if (asset.getObjectKey() != null && !asset.getObjectKey().isBlank()) {
+                try {
+                    storageService.delete(asset.getObjectKey());
+                } catch (Exception ignored) {
+                }
+            }
+        }
         assetMapper.delete(new LambdaQueryWrapper<Asset>().in(Asset::getEntityId, entityIds));
+
+        // 清理属性图片（存在 attributes JSON 中，路径以 p{pid}/attr/ 开头）
+        List<SimEntity> entities = entityMapper.selectByIds(entityIds);
+        for (SimEntity entity : entities) {
+            deleteAttrImages(entity);
+        }
+    }
+
+    /** 从实体 attributes 中解析 IMAGE 类型字段值（objectKey），通过引用计数释放。 */
+    private void deleteAttrImages(SimEntity entity) {
+        List<String> keys = extractAttrImageKeys(entity.getAttributes());
+        if (!keys.isEmpty()) {
+            attrImageRefService.releaseRefs(keys);
+        }
+    }
+
+    /** 为实体 attributes 中已有的图片 key 增加引用（复制卡片场景）。 */
+    private void addAttrImageRefs(Long projectId, String attributes) {
+        List<String> keys = extractAttrImageKeys(attributes);
+        if (!keys.isEmpty()) {
+            attrImageRefService.addRefs(projectId, keys);
+        }
+    }
+
+    /** 从 attributes JSON 中提取所有属性图片 objectKey。 */
+    private List<String> extractAttrImageKeys(String attrs) {
+        if (attrs == null || !attrs.contains("/attr/")) return List.of();
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("\"(p\\d+/attr/[^\"]+)\"")
+                .matcher(attrs);
+        List<String> keys = new ArrayList<>();
+        while (m.find()) {
+            keys.add(m.group(1));
+        }
+        return keys;
     }
 
     @Override

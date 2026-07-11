@@ -10,6 +10,5 @@ import jakarta.validation.constraints.Size;
  */
 public record EntityTemplateRequest(
         @NotBlank @Size(max = 64) String name,
-        @Size(max = 32) String icon,
         String fieldSchema) {
 }

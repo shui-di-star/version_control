@@ -1,6 +1,7 @@
 import instance, { get, post, put, del } from './http';
 import type {
   AssetVO,
+  GlobalStatsVO,
   OperationLogVO,
   ProjectExport,
   ProjectStatsVO,
@@ -43,6 +44,8 @@ export const assetApi = {
   download: (pid: string, assetId: string) =>
     instance.get(`/projects/${pid}/assets/${assetId}/download`, { responseType: 'blob' }),
   remove: (pid: string, assetId: string) => del<void>(`/projects/${pid}/assets/${assetId}`),
+  /** 图片内联预览 URL（供 <img src> 使用）。 */
+  previewUrl: (pid: string, assetId: string) => `/api/projects/${pid}/assets/${assetId}/preview`,
 };
 
 export const statsApi = {
@@ -50,11 +53,16 @@ export const statsApi = {
     get<ProjectStatsVO>(`/projects/${pid}/stats`, {
       params: numberFieldKey ? { numberFieldKey } : undefined,
     }),
+  global: () => get<GlobalStatsVO>('/stats/global'),
 };
 
 export const searchApi = {
-  search: (pid: string, keyword: string) =>
-    get<SearchHit[]>(`/projects/${pid}/search`, { params: { keyword } }),
+  search: (pid: string, keyword: string, startDate?: string, endDate?: string) => {
+    const params: Record<string, string> = { keyword };
+    if (startDate) params.startDate = startDate;
+    if (endDate) params.endDate = endDate;
+    return get<SearchHit[]>(`/projects/${pid}/search`, { params });
+  },
 };
 
 export const logApi = {
@@ -64,4 +72,18 @@ export const logApi = {
 export const portApi = {
   export: (pid: string) => get<ProjectExport>(`/projects/${pid}/export`),
   import: (pid: string, data: ProjectExport) => post<void>(`/projects/${pid}/import`, data),
+};
+
+/** 属性图片接口（与产出物 asset 完全独立）。 */
+export const attrImageApi = {
+  upload: (pid: string, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return post<{ objectKey: string }>(`/projects/${pid}/attr-images`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  /** 属性图片预览 URL（公开端点，供 <img src> 使用）。 */
+  previewUrl: (pid: string, objectKey: string) =>
+    `/api/projects/${pid}/attr-images/preview?key=${encodeURIComponent(objectKey)}`,
 };

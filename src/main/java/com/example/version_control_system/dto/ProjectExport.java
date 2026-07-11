@@ -13,7 +13,7 @@ public record ProjectExport(
         List<ExportRelation> relations,
         List<ExportAsset> assets) {
 
-    public record ExportEntityTemplate(Long id, String name, String icon, String fieldSchema) {
+    public record ExportEntityTemplate(Long id, String name, String fieldSchema) {
     }
 
     public record ExportRelationTemplate(Long id, String name, Integer directed, String lineStyle,

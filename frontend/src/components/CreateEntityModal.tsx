@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Modal, Form, Input, Select, message } from 'antd';
+import { Modal, Form, Input, Select, App } from 'antd';
 import { entityApi } from '@/api/entity';
 import { useProjectStore } from '@/stores/projectStore';
 import { useTreeStore } from '@/stores/treeStore';
@@ -14,6 +14,7 @@ interface Props {
 }
 
 export default function CreateEntityModal({ open, parentId, onClose, onCreated }: Props) {
+  const { message } = App.useApp();
   const currentProject = useProjectStore((s) => s.currentProject);
   const entityTemplates = useTreeStore((s) => s.entityTemplates);
   const relationTemplates = useTreeStore((s) => s.relationTemplates);
@@ -28,12 +29,15 @@ export default function CreateEntityModal({ open, parentId, onClose, onCreated }
   const onOk = async () => {
     if (!pid) return;
     const v = await form.validateFields();
+    const attrValues = formToAttrs(v.attrs ?? {}, fields);
+    // 用卡片名称作为实体 name；如果模板没有 card_name 字段则用第一个属性值或模板名
+    const name = String(attrValues['card_name'] ?? v.attrs?.['card_name'] ?? '未命名');
     await entityApi.create(pid, {
       templateId: v.templateId,
       parentId: parentId ?? null,
-      name: v.name,
+      name,
       remark: v.remark,
-      attributes: JSON.stringify(formToAttrs(v.attrs ?? {}, fields)),
+      attributes: JSON.stringify(attrValues),
       parentRelationTemplateId: v.parentRelationTemplateId,
       parentRelationRemark: v.parentRelationRemark,
     });
@@ -50,7 +54,7 @@ export default function CreateEntityModal({ open, parentId, onClose, onCreated }
       open={open}
       onOk={onOk}
       onCancel={onClose}
-      destroyOnHidden
+      forceRender
     >
       <Form form={form} layout="vertical">
         <Form.Item name="templateId" label="实体模板" rules={[{ required: true }]}>
@@ -61,9 +65,6 @@ export default function CreateEntityModal({ open, parentId, onClose, onCreated }
               form.setFieldValue('attrs', {});
             }}
           />
-        </Form.Item>
-        <Form.Item name="name" label="名称" rules={[{ required: true, max: 128 }]}>
-          <Input />
         </Form.Item>
         {parentId && (
           <>
@@ -78,7 +79,7 @@ export default function CreateEntityModal({ open, parentId, onClose, onCreated }
             </Form.Item>
           </>
         )}
-        <AttributeFields fields={fields} />
+        <AttributeFields fields={fields} projectId={pid} />
         <Form.Item name="remark" label="备注" rules={[{ max: 512 }]}>
           <Input.TextArea rows={2} />
         </Form.Item>

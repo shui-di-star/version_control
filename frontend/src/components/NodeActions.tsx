@@ -1,4 +1,4 @@
-import { Button, Divider, Modal, Select, Input, message, Space } from 'antd';
+import { App, Button, Divider, Select, Input, Space } from 'antd';
 import {
   PlusOutlined,
   DeleteOutlined,
@@ -51,6 +51,7 @@ function flattenTree(roots: EntityTreeNode[]): { id: string; name: string }[] {
 }
 
 export default function NodeActions({ nodeId, onCreateChild, onDelete, onRefresh }: Props) {
+  const { message, modal } = App.useApp();
   const pid = useProjectStore((s) => s.currentProject?.id);
   const tree = useTreeStore((s) => s.tree);
   const relationTemplates = useTreeStore((s) => s.relationTemplates);
@@ -65,7 +66,7 @@ export default function NodeActions({ nodeId, onCreateChild, onDelete, onRefresh
     let selectedTemplateId: string | undefined;
     let remark = '';
 
-    Modal.confirm({
+    modal.confirm({
       title,
       width: 480,
       content: (
@@ -115,7 +116,7 @@ export default function NodeActions({ nodeId, onCreateChild, onDelete, onRefresh
 
   const handleMoveDown = () => {
     let selectedSiblingId: string | undefined;
-    Modal.confirm({
+    modal.confirm({
       title: '层级下移 — 选择目标兄弟节点',
       width: 480,
       content: (
@@ -144,7 +145,7 @@ export default function NodeActions({ nodeId, onCreateChild, onDelete, onRefresh
   const handleReparent = () => {
     let selectedParentId: string | null = null;
     const allNodes = flattenTree(tree).filter((n) => n.id !== nodeId);
-    Modal.confirm({
+    modal.confirm({
       title: '重选父节点',
       width: 480,
       content: (

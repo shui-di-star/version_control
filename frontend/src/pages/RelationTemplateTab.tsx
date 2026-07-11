@@ -8,7 +8,7 @@ import {
   Input,
   Select,
   Switch,
-  message,
+  App,
   Popconfirm,
   ColorPicker,
   Tag,
@@ -25,6 +25,7 @@ interface LineStyle {
 }
 
 export default function RelationTemplateTab() {
+  const { message } = App.useApp();
   const currentProject = useProjectStore((s) => s.currentProject);
   const isAdmin = useProjectStore((s) => s.hasRole('ADMIN'));
   const pid = currentProject?.id;
@@ -175,7 +176,7 @@ export default function RelationTemplateTab() {
         width={620}
         onOk={onSubmit}
         onCancel={() => setOpen(false)}
-        destroyOnHidden
+        forceRender
       >
         <Form form={form} layout="vertical">
           <Form.Item name="name" label="模板名" rules={[{ required: true, max: 64 }]}>

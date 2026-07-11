@@ -1,0 +1,277 @@
+/* ===== Left Sidebar (aligned with example project) ===== */
+.left-sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+/* Panel head */
+.panel-head {
+  padding: 20px 16px 12px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.panel-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 4px;
+}
+.panel-desc {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 6px;
+  line-height: 1.5;
+}
+.panel-summary {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+/* Scrollable body */
+.sidebar-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+/* Section */
+.sidebar-section {
+  padding: 8px 16px 12px;
+}
+.sidebar-section + .sidebar-section {
+  border-top: 1px solid var(--line);
+}
+
+/* Section titles */
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.section-title.clickable {
+  cursor: pointer;
+  user-select: none;
+}
+.section-title.clickable:hover {
+  color: var(--blue);
+}
+.toggle-arrow {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* KPI grid (project overview) */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.kpi {
+  min-height: 62px;
+  padding: 9px;
+  border-radius: var(--radius);
+  background: #fbfcfe;
+  border: 1px solid var(--line);
+}
+.kpi-label {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.kpi-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* Project list (part-tree) */
+.part-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.part-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.part-item:hover {
+  background: var(--panel-soft);
+}
+.part-item.active {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+}
+.part-item-icon {
+  font-size: 16px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.part-item.active .part-item-icon {
+  color: var(--blue);
+}
+.part-item-content {
+  flex: 1;
+  min-width: 0;
+}
+.part-item-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.part-item-meta {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* Library actions (new/copy card) */
+.library-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Copy preview card */
+.copy-preview-card {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: var(--radius);
+  background: #f0f7ff;
+  border: 1px dashed var(--blue);
+  cursor: grab;
+}
+.copy-preview-card:active {
+  cursor: grabbing;
+}
+.copy-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.copy-preview-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.copy-preview-meta {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+  padding-left: 22px;
+}
+.copy-preview-hint {
+  font-size: 11px;
+  color: var(--blue);
+  margin-top: 6px;
+  text-align: center;
+}
+
+/* Project root item (collapsible header for project list) */
+.project-root-item {
+  padding: 10px 10px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+  margin-bottom: 4px;
+}
+.project-root-item:hover {
+  background: var(--panel-soft);
+}
+.project-root-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+}
+.project-root-title .toggle-arrow {
+  margin-left: auto;
+}
+.project-root-meta {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+  padding-left: 22px;
+}
+
+/* Recommend badge (red) */
+.recommend-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(199, 59, 59, 0.1);
+  color: #c73b3b;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Number attribute statistics */
+.number-stat-card {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  background: #fbfcfe;
+  border: 1px solid var(--line);
+}
+.number-stat-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.number-stat-empty {
+  font-size: 12px;
+  color: var(--muted);
+}
+.number-stat-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  font-size: 12px;
+}
+.number-stat-label {
+  color: var(--muted);
+  flex-shrink: 0;
+  width: 36px;
+}
+.number-stat-value {
+  font-weight: 700;
+  color: var(--text);
+  flex-shrink: 0;
+}
+.number-stat-name {
+  color: var(--blue);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}

@@ -1,13 +1,15 @@
 import { useState } from 'react';
-import { Button, Space, Upload, message, Typography, Card } from 'antd';
+import { App, Button, Space, Upload, Typography, Card, Modal } from 'antd';
 import { DownloadOutlined, UploadOutlined } from '@ant-design/icons';
 import type { UploadProps } from 'antd';
 import { portApi } from '@/api/misc';
+import { entityApi } from '@/api/entity';
 import { useProjectStore } from '@/stores/projectStore';
 import type { ProjectExport } from '@/types/api';
 
 // 导入导出：导出下载 JSON；导入上传 JSON（后端一律分配新 id）。仅 ADMIN。
 export default function PortTab() {
+  const { message } = App.useApp();
   const currentProject = useProjectStore((s) => s.currentProject);
   const pid = currentProject?.id;
   const [exporting, setExporting] = useState(false);
@@ -35,12 +37,22 @@ export default function PortTab() {
     if (!pid) return Upload.LIST_IGNORE;
     setImporting(true);
     try {
+      // 检查项目是否为空
+      const tree = await entityApi.tree(pid);
+      if (tree && tree.length > 0) {
+        Modal.warning({
+          title: '无法导入',
+          content: '只能向空项目导入数据。当前项目已有实体，请先清空或新建一个空项目再导入。',
+        });
+        return Upload.LIST_IGNORE;
+      }
       const text = await file.text();
       const data = JSON.parse(text) as ProjectExport;
       await portApi.import(pid, data);
       message.success('已导入到当前项目');
-    } catch (e) {
-      message.error('导入失败：文件格式错误或后端拒绝');
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || '文件格式错误或后端拒绝';
+      message.error('导入失败：' + msg);
     } finally {
       setImporting(false);
     }
@@ -59,7 +71,7 @@ export default function PortTab() {
       </Card>
       <Card size="small" title="导入项目">
         <Typography.Paragraph type="secondary">
-          选择一个导出的 JSON 文件导入到<strong>当前项目</strong>，后端会为所有记录分配新 id。
+          选择一个导出的 JSON 文件导入到<strong>当前项目</strong>。只能向空项目导入，导入后会覆盖预设模板。
         </Typography.Paragraph>
         <Upload accept=".json" beforeUpload={beforeUpload} showUploadList={false}>
           <Button icon={<UploadOutlined />} loading={importing}>

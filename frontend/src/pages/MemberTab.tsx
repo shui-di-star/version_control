@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select, message, Popconfirm, Tag } from 'antd';
+import { App, Table, Button, Space, Modal, Form, Input, Select, Popconfirm, Tag } from 'antd';
 import { memberApi } from '@/api/project';
 import { useProjectStore } from '@/stores/projectStore';
 import type { MemberVO, ProjectRoleName } from '@/types/api';
 
 export default function MemberTab() {
+  const { message } = App.useApp();
   const currentProject = useProjectStore((s) => s.currentProject);
   const isAdmin = useProjectStore((s) => s.hasRole('ADMIN'));
   const pid = currentProject?.id;
@@ -74,7 +75,7 @@ export default function MemberTab() {
         </Button>
       </Space>
       <Table rowKey="userId" loading={loading} columns={columns} dataSource={data} />
-      <Modal title="添加成员" open={open} onOk={onAdd} onCancel={() => setOpen(false)} destroyOnHidden>
+      <Modal title="添加成员" open={open} onOk={onAdd} onCancel={() => setOpen(false)} forceRender>
         <Form form={form} layout="vertical">
           <Form.Item name="username" label="用户名" rules={[{ required: true }]}>
             <Input placeholder="输入目标用户的用户名" />

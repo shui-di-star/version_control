@@ -12,12 +12,19 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 
-/** 搜索实现：对 t_entity.name/remark/parent_relation_remark、t_relation.remark 做 LIKE 匹配。 */
+/**
+ * 搜索实现：对 t_entity.attributes 中指定字段（card_name/owner/result_conclusion/other_notes）
+ * + t_relation.remark 做 LIKE 匹配，可选时间范围过滤。
+ */
 @Service
 public class SearchServiceImpl implements SearchService {
 
     private final SimEntityMapper entityMapper;
     private final RelationMapper relationMapper;
+
+    /** attributes 中参与搜索的字段 key。 */
+    private static final List<String> SEARCH_ATTR_KEYS = List.of(
+            "card_name", "owner", "result_conclusion", "other_notes");
 
     public SearchServiceImpl(SimEntityMapper entityMapper, RelationMapper relationMapper) {
         this.entityMapper = entityMapper;
@@ -25,29 +32,25 @@ public class SearchServiceImpl implements SearchService {
     }
 
     @Override
-    public List<SearchHit> search(Long projectId, String keyword) {
+    public List<SearchHit> search(Long projectId, String keyword, String startDate, String endDate) {
         List<SearchHit> hits = new ArrayList<>();
         if (keyword == null || keyword.isBlank()) {
             return hits;
         }
 
-        // 实体：名称、备注、父子关系备注
-        List<SimEntity> entities = entityMapper.selectList(new LambdaQueryWrapper<SimEntity>()
-                .eq(SimEntity::getProjectId, projectId)
-                .and(w -> w.like(SimEntity::getName, keyword)
-                        .or().like(SimEntity::getRemark, keyword)
-                        .or().like(SimEntity::getParentRelationRemark, keyword)));
+        // 实体：通过 mapper 自定义 SQL 搜索 attributes 中指定字段
+        List<SimEntity> entities = entityMapper.searchByKeywordAndDate(projectId, keyword, startDate, endDate);
         for (SimEntity e : entities) {
-            if (e.getName() != null && e.getName().contains(keyword)) {
-                hits.add(new SearchHit("ENTITY", e.getId(), null, null, null, "name", e.getName()));
-            }
-            if (e.getRemark() != null && e.getRemark().contains(keyword)) {
-                hits.add(new SearchHit("ENTITY", e.getId(), null, null, null, "remark", e.getRemark()));
-            }
-            if (e.getParentRelationRemark() != null && e.getParentRelationRemark().contains(keyword)) {
-                // 父子关系备注命中：fromEntityId = parentId, toEntityId = 自身
-                hits.add(new SearchHit("PARENT_RELATION", e.getId(), null,
-                        e.getParentId(), e.getId(), "关系备注", e.getParentRelationRemark()));
+            // 检查 attributes 中的字段
+            String attrs = e.getAttributes();
+            if (attrs != null) {
+                for (String key : SEARCH_ATTR_KEYS) {
+                    String value = extractJsonValue(attrs, key);
+                    if (value != null && value.contains(keyword)) {
+                        hits.add(new SearchHit("ENTITY", e.getId(), null, null, null, key, value));
+                        break; // 每个实体的 attributes 只命中一次避免重复
+                    }
+                }
             }
         }
 
@@ -60,5 +63,32 @@ public class SearchServiceImpl implements SearchService {
                     r.getFromEntityId(), r.getToEntityId(), "remark", r.getRemark()));
         }
         return hits;
+    }
+
+    /** 简单从 JSON 字符串中提取指定 key 的值（避免引入额外解析开销）。 */
+    private static String extractJsonValue(String json, String key) {
+        // 查找 "key":"value" 或 "key": "value" 模式
+        String pattern = "\"" + key + "\"";
+        int idx = json.indexOf(pattern);
+        if (idx < 0) return null;
+        int colonIdx = json.indexOf(':', idx + pattern.length());
+        if (colonIdx < 0) return null;
+        // 跳过空白
+        int start = colonIdx + 1;
+        while (start < json.length() && json.charAt(start) == ' ') start++;
+        if (start >= json.length()) return null;
+        char ch = json.charAt(start);
+        if (ch == '"') {
+            // 字符串值
+            int end = json.indexOf('"', start + 1);
+            return end > 0 ? json.substring(start + 1, end) : null;
+        } else if (ch == 'n') {
+            return null; // null
+        } else {
+            // 数字或其他
+            int end = start;
+            while (end < json.length() && json.charAt(end) != ',' && json.charAt(end) != '}') end++;
+            return json.substring(start, end).trim();
+        }
     }
 }

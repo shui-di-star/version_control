@@ -28,7 +28,7 @@ public class ProjectController {
     @GetMapping
     public Result<List<ProjectVO>> myProjects() {
         AuthUser current = SecurityUtils.getCurrentUser();
-        return Result.success(projectService.listMyProjects(current.userId()));
+        return Result.success(projectService.listMyProjects(current.userId(), current.isSuperAdmin()));
     }
 
     @PostMapping

@@ -74,6 +74,23 @@ public class AssetController {
         return builder.body(new InputStreamResource(d.stream()));
     }
 
+    /** 图片内联预览：返回二进制流 + Content-Type，供前端 &lt;img src="..."&gt; 直接引用。公开端点。 */
+    @GetMapping("/assets/{assetId}/preview")
+    public ResponseEntity<InputStreamResource> preview(@PathVariable("projectId") Long projectId,
+                                                       @PathVariable("assetId") Long assetId) {
+        AssetDownload d = assetService.download(projectId, assetId);
+        MediaType mediaType = d.mimeType() != null
+                ? MediaType.parseMediaType(d.mimeType()) : MediaType.APPLICATION_OCTET_STREAM;
+        ResponseEntity.BodyBuilder builder = ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
+                .header(HttpHeaders.CACHE_CONTROL, "max-age=3600")
+                .contentType(mediaType);
+        if (d.size() != null) {
+            builder.contentLength(d.size());
+        }
+        return builder.body(new InputStreamResource(d.stream()));
+    }
+
     @DeleteMapping("/assets/{assetId}")
     @RequireProjectRole(ProjectRole.EDITOR)
     public Result<Void> delete(@PathVariable("projectId") Long projectId,

@@ -13,7 +13,6 @@ public class EntityTemplate extends BaseEntity {
 
     private Long projectId;
     private String name;
-    private String icon;
     /** 自定义字段定义 JSON（见 §3.3）。 */
     private String fieldSchema;
 

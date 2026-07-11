@@ -24,6 +24,8 @@ export interface EdgeSearchTarget {
   relationId?: string;
 }
 
+export type GraphMode = 'move' | 'connect';
+
 interface TreeState {
   tree: EntityTreeNode[];
   relations: RelationVO[];
@@ -34,6 +36,13 @@ interface TreeState {
   searchHits: SearchHit[];
   pathHighlight: string[];
   selectedEdgeFromSearch: EdgeSearchTarget | null;
+  compareIds: string[];
+  /** 连线模式：选中的关系模板ID，非null时点击连线可更改其类型 */
+  connectRelationTemplateId: string | null;
+  /** 图谱交互模式：移动 / 连线 */
+  graphMode: GraphMode;
+  /** 复制卡片：源实体ID */
+  copySourceId: string | null;
 
   setTree: (tree: EntityTreeNode[]) => void;
   setRelations: (relations: RelationVO[]) => void;
@@ -45,6 +54,11 @@ interface TreeState {
   setSearchHits: (hits: SearchHit[]) => void;
   setPathHighlight: (ids: string[]) => void;
   setSelectedEdgeFromSearch: (t: EdgeSearchTarget | null) => void;
+  toggleCompare: (id: string) => void;
+  clearCompare: () => void;
+  setConnectRelationTemplateId: (id: string | null) => void;
+  setGraphMode: (mode: GraphMode) => void;
+  setCopySourceId: (id: string | null) => void;
 }
 
 const EMPTY_FILTER: TreeFilter = {
@@ -64,6 +78,10 @@ export const useTreeStore = create<TreeState>((set) => ({
   searchHits: [],
   pathHighlight: [],
   selectedEdgeFromSearch: null,
+  compareIds: [],
+  connectRelationTemplateId: null,
+  graphMode: 'move',
+  copySourceId: null,
 
   setTree: (tree) => set({ tree }),
   setRelations: (relations) => set({ relations }),
@@ -75,4 +93,14 @@ export const useTreeStore = create<TreeState>((set) => ({
   setSearchHits: (searchHits) => set({ searchHits }),
   setPathHighlight: (pathHighlight) => set({ pathHighlight }),
   setSelectedEdgeFromSearch: (selectedEdgeFromSearch) => set({ selectedEdgeFromSearch }),
+  toggleCompare: (id) => set((s) => {
+    const next = s.compareIds.includes(id)
+      ? s.compareIds.filter((x) => x !== id)
+      : [...s.compareIds, id];
+    return { compareIds: next };
+  }),
+  clearCompare: () => set({ compareIds: [] }),
+  setConnectRelationTemplateId: (connectRelationTemplateId) => set({ connectRelationTemplateId }),
+  setGraphMode: (graphMode) => set({ graphMode }),
+  setCopySourceId: (copySourceId) => set({ copySourceId }),
 }));

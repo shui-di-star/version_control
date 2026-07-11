@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { List, Button, Upload, Space, message, Popconfirm, Input, Modal } from 'antd';
+import { App, List, Button, Upload, Space, Popconfirm, Input, Modal, Image } from 'antd';
 import { UploadOutlined, DownloadOutlined, DeleteOutlined, FileTextOutlined } from '@ant-design/icons';
 import type { UploadProps } from 'antd';
 import { assetApi } from '@/api/misc';
@@ -8,7 +8,16 @@ import { MAX_ASSET_SIZE } from '@/utils/constants';
 import type { AssetVO } from '@/types/api';
 
 // 产出物区：列表/上传/TEXT内联/下载/删除。EDITOR+ 可写。
+// 图片类型产出物直接内联展示，可点击放大。
+
+function isImageAsset(a: AssetVO): boolean {
+  if (a.mimeType?.startsWith('image/')) return true;
+  const name = (a.fileName || '').toLowerCase();
+  return /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(name);
+}
+
 export default function AssetSection({ entityId }: { entityId: string }) {
+  const { message, modal } = App.useApp();
   const currentProject = useProjectStore((s) => s.currentProject);
   const canWrite = useProjectStore((s) => s.hasRole('EDITOR'));
   const pid = currentProject?.id;
@@ -54,7 +63,7 @@ export default function AssetSection({ entityId }: { entityId: string }) {
   const onDownload = async (a: AssetVO) => {
     if (!pid) return;
     if (a.assetType === 'TEXT') {
-      Modal.info({ title: a.fileName, content: <pre style={{ whiteSpace: 'pre-wrap' }}>{a.contentText}</pre>, width: 640 });
+      modal.info({ title: a.fileName, content: <pre style={{ whiteSpace: 'pre-wrap' }}>{a.contentText}</pre>, width: 640 });
       return;
     }
     const resp = await assetApi.download(pid, a.id);
@@ -104,7 +113,21 @@ export default function AssetSection({ entityId }: { entityId: string }) {
               ) : null,
             ]}
           >
-            <List.Item.Meta title={a.fileName} description={`${a.assetType}${a.size ? ` · ${(a.size / 1024).toFixed(1)}KB` : ''}`} />
+            <List.Item.Meta
+              title={a.fileName}
+              description={
+                isImageAsset(a) && pid ? (
+                  <Image
+                    src={assetApi.previewUrl(pid, a.id)}
+                    alt={a.fileName}
+                    style={{ maxWidth: 200, maxHeight: 150, marginTop: 4 }}
+                    placeholder
+                  />
+                ) : (
+                  `${a.assetType}${a.size ? ` · ${(a.size / 1024).toFixed(1)}KB` : ''}`
+                )
+              }
+            />
           </List.Item>
         )}
       />

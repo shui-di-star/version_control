@@ -9,8 +9,8 @@ import java.util.List;
 /** 项目服务：当前用户参与的项目列表与项目增删改。 */
 public interface ProjectService {
 
-    /** 当前用户参与的项目列表（含其在每个项目的角色）。 */
-    List<ProjectVO> listMyProjects(Long userId);
+    /** 当前用户参与的项目列表（含其在每个项目的角色）。superAdmin 看到所有项目。 */
+    List<ProjectVO> listMyProjects(Long userId, boolean superAdmin);
 
     /** 创建项目，创建者自动成为该项目 ADMIN 成员。 */
     ProjectVO create(Long userId, ProjectCreateRequest request);

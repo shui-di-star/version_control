@@ -58,6 +58,7 @@ export interface ProjectVO {
   name: string;
   description?: string;
   ownerId: string;
+  ownerName?: string;
   myRole: ProjectRoleName;
 }
 
@@ -81,7 +82,7 @@ export interface MemberAddRequest {
 }
 
 // ---------- 模板 ----------
-export type FieldType = 'TEXT' | 'NUMBER' | 'ENUM' | 'DATE' | 'FILE';
+export type FieldType = 'TEXT' | 'NUMBER' | 'ENUM' | 'DATE' | 'IMAGE';
 
 /** field_schema 中单个字段定义。 */
 export interface SchemaField {
@@ -91,6 +92,9 @@ export interface SchemaField {
   required?: boolean;
   options?: string[];
   showOnCard?: boolean;
+  unit?: string;
+  compareInCard?: boolean;
+  keyMetric?: boolean;
 }
 
 /** field_schema JSON 顶层结构。 */
@@ -102,13 +106,11 @@ export interface EntityTemplateVO {
   id: string;
   projectId: string;
   name: string;
-  icon?: string;
   fieldSchema?: string; // JSON 字符串
 }
 
 export interface EntityTemplateRequest {
   name: string;
-  icon?: string;
   fieldSchema?: string;
 }
 
@@ -219,6 +221,14 @@ export interface ProjectStatsVO {
   simulating: number;
   recommended: number;
   maxNumberValue: number | null;
+  cardCount: number;
+  assetCount: number;
+}
+
+export interface GlobalStatsVO {
+  projectCount: number;
+  cardCount: number;
+  assetCount: number;
 }
 
 // ---------- 搜索 ----------

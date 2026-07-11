@@ -1,4 +1,4 @@
-import { Modal, Form, Select, Input, message } from 'antd';
+import { Modal, Form, Select, Input, App } from 'antd';
 import { relationApi } from '@/api/misc';
 import { useProjectStore } from '@/stores/projectStore';
 import { useTreeStore } from '@/stores/treeStore';
@@ -12,6 +12,7 @@ interface Props {
 
 // 新建语义关系：选关系模板 + 源/目标节点。受 allowed_from/to 约束（后端校验，返 1000）。
 export default function CreateRelationModal({ open, onClose, onCreated }: Props) {
+  const { message } = App.useApp();
   const currentProject = useProjectStore((s) => s.currentProject);
   const tree = useTreeStore((s) => s.tree);
   const relationTemplates = useTreeStore((s) => s.relationTemplates);
@@ -35,7 +36,7 @@ export default function CreateRelationModal({ open, onClose, onCreated }: Props)
   };
 
   return (
-    <Modal title="新建语义关系" open={open} onOk={onOk} onCancel={onClose} destroyOnHidden>
+    <Modal title="新建语义关系" open={open} onOk={onOk} onCancel={onClose} forceRender>
       <Form form={form} layout="vertical">
         <Form.Item name="templateId" label="关系模板" rules={[{ required: true }]}>
           <Select options={relationTemplates.map((t) => ({ value: t.id, label: t.name }))} />

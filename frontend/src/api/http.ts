@@ -1,7 +1,7 @@
 import axios, { type AxiosRequestConfig } from 'axios';
-import { message } from 'antd';
 import type { Result } from '@/types/api';
 import { useAuthStore } from '@/stores/authStore';
+import { getGlobalMessage } from '@/utils/appMessage';
 
 // baseURL=/api，开发环境经 Vite 代理转发到后端 8080。
 const instance = axios.create({
@@ -33,24 +33,31 @@ instance.interceptors.response.use(
       if (body.code === 0) {
         return body.data;
       }
-      message.error(body.message || '请求失败');
+      // _silent 标记：调用方自行处理错误，不弹 toast
+      if (!(response.config as any)?._silent) {
+        getGlobalMessage()?.error(body.message || '请求失败');
+      }
       return Promise.reject(body);
     }
     return response.data;
   },
   (error) => {
+    // _silent 标记：调用方自行处理错误，不弹 toast
+    if ((error?.config as any)?._silent) {
+      return Promise.reject(error);
+    }
     const status = error?.response?.status;
     if (status === 401) {
       useAuthStore.getState().clear();
-      message.error('登录已失效，请重新登录');
+      getGlobalMessage()?.error('登录已失效，请重新登录');
       if (!location.pathname.startsWith('/login')) {
         location.href = '/login';
       }
     } else if (status === 403) {
-      message.error('无权限执行该操作');
+      getGlobalMessage()?.error('无权限执行该操作');
     } else {
       const body = error?.response?.data;
-      message.error(body?.message || error.message || '网络错误');
+      getGlobalMessage()?.error(body?.message || error.message || '网络错误');
     }
     return Promise.reject(error);
   },
@@ -59,6 +66,11 @@ instance.interceptors.response.use(
 /** 返回解包后的 data（T）。 */
 export function get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
   return instance.get(url, config) as unknown as Promise<T>;
+}
+
+/** 静默 GET：不弹错误 toast，由调用方自行处理。 */
+export function getSilent<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  return instance.get(url, { ...config, _silent: true } as any) as unknown as Promise<T>;
 }
 
 export function post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {

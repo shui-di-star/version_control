@@ -39,6 +39,7 @@ CLAUDE.md
 
 ### Frontend ###
 frontend/node_modules/
+*.tsbuildinfo
 
 ### Temp report files ###
 FINAL_REPORT.txt
@@ -48,3 +49,16 @@ findings.txt
 
 ### Videos ###
 video/
+
+### Archives ###
+*.tar.gz
+
+### Logs ###
+*.log
+*.log.*.gz
+
+### Reference project ###
+fangzhen-shuju-guanli-pingtai-main/
+
+### Misc ###
+startup.log

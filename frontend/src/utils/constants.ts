@@ -1,11 +1,11 @@
-import type { EntityStatus, FieldType } from '@/types/api';
+import type { EntityStatus, FieldType, SchemaField } from '@/types/api';
 
-/** 实体状态：值 → 中文标签 + 展示色。 */
+/** 实体状态：值 → 中文标签 + 展示色（对齐示例项目）。 */
 export const STATUS_META: Record<EntityStatus, { label: string; color: string }> = {
-  RECOMMENDED: { label: '推荐', color: '#f5222d' },
-  DEPRECATED: { label: '淘汰', color: '#8c8c8c' },
-  SIMULATING: { label: '仿真中', color: '#faad14' },
-  COMPLETED: { label: '已完成', color: '#52c41a' },
+  RECOMMENDED: { label: '推荐', color: '#c73b3b' },
+  DEPRECATED: { label: '淘汰', color: '#7c8794' },
+  SIMULATING: { label: '仿真中', color: '#b26a00' },
+  COMPLETED: { label: '已完成', color: '#168a4a' },
 };
 
 export const STATUS_OPTIONS: { value: EntityStatus; label: string }[] = (
@@ -18,10 +18,19 @@ export const FIELD_TYPE_LABEL: Record<FieldType, string> = {
   NUMBER: '数字',
   ENUM: '枚举',
   DATE: '日期',
-  FILE: '文件',
+  IMAGE: '图片',
 };
 
-export const FIELD_TYPES: FieldType[] = ['TEXT', 'NUMBER', 'ENUM', 'DATE', 'FILE'];
+export const FIELD_TYPES: FieldType[] = ['TEXT', 'NUMBER', 'ENUM', 'DATE', 'IMAGE'];
 
 /** 产出物大小上限：100MB（与后端一致）。 */
 export const MAX_ASSET_SIZE = 100 * 1024 * 1024;
+
+/** 新建实体模板时的预设字段（5个，与后端 EntityTemplateServiceImpl.DEFAULT_FIELD_SCHEMA 一致）。 */
+export const DEFAULT_ENTITY_FIELDS: SchemaField[] = [
+  { key: 'card_name', label: '卡片名称', type: 'TEXT', required: true, showOnCard: true, compareInCard: true },
+  { key: 'time', label: '时间', type: 'DATE', required: false, showOnCard: false },
+  { key: 'owner', label: '负责人', type: 'TEXT', required: false, showOnCard: true, compareInCard: true },
+  { key: 'result_conclusion', label: '结果结论', type: 'TEXT', required: false, showOnCard: false },
+  { key: 'other_notes', label: '其他备注', type: 'TEXT', required: false, showOnCard: false },
+];

@@ -23,7 +23,9 @@ public class SearchController {
     @GetMapping
     @RequireProjectRole(ProjectRole.VIEWER)
     public Result<List<SearchHit>> search(@PathVariable("projectId") Long projectId,
-                                          @RequestParam("keyword") String keyword) {
-        return Result.success(searchService.search(projectId, keyword));
+                                          @RequestParam("keyword") String keyword,
+                                          @RequestParam(value = "startDate", required = false) String startDate,
+                                          @RequestParam(value = "endDate", required = false) String endDate) {
+        return Result.success(searchService.search(projectId, keyword, startDate, endDate));
     }
 }

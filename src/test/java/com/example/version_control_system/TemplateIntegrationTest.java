@@ -85,7 +85,7 @@ class TemplateIntegrationTest {
 
     private String entityTemplateBody(String name, String fieldSchema) throws Exception {
         return objectMapper.writeValueAsString(
-                new com.example.version_control_system.dto.EntityTemplateRequest(name, "cube", fieldSchema));
+                new com.example.version_control_system.dto.EntityTemplateRequest(name, fieldSchema));
     }
 
     private String relationTemplateBody(String name, Integer directed, String lineStyle,

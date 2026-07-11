@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card, Descriptions, Tag, Select, Input, Button, message, Space } from 'antd';
+import { App, Card, Descriptions, Tag, Select, Input, Button, Space } from 'antd';
 import { entityApi } from '@/api/entity';
 import { relationApi } from '@/api/misc';
 import { useProjectStore } from '@/stores/projectStore';
@@ -12,6 +12,7 @@ interface Props {
 }
 
 export default function EdgeDetailPanel({ edge, onChanged }: Props) {
+  const { message } = App.useApp();
   const pid = useProjectStore((s) => s.currentProject?.id);
   const canWrite = useProjectStore((s) => s.hasRole('EDITOR'));
   const relationTemplates = useTreeStore((s) => s.relationTemplates);

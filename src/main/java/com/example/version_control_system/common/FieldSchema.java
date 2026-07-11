@@ -5,18 +5,20 @@ import tools.jackson.databind.JsonNode;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * 模板 field_schema 的解析与校验（§3.3）。
- * <p>结构：{@code {"fields":[{"key","label","type","required?","options?",...}]}}；
- * type ∈ TEXT/NUMBER/ENUM/DATE/FILE。</p>
+ * <p>结构：{@code {"fields":[{"key","label","type","required?","options?","unit?","showOnCard?",...}]}}；
+ * type ∈ TEXT/NUMBER/ENUM/DATE/IMAGE。</p>
  */
 public final class FieldSchema {
 
-    /** 允许的字段类型。 */
-    public static final List<String> TYPES = List.of("TEXT", "NUMBER", "ENUM", "DATE", "FILE");
+    /** 允许的字段类型。FILE 已更名为 IMAGE（Phase 2）。 */
+    public static final List<String> TYPES = List.of("TEXT", "NUMBER", "ENUM", "DATE", "IMAGE");
 
-    public record Field(String key, String label, String type, boolean required, List<String> options, boolean showOnCard) {
+    public record Field(String key, String label, String type, boolean required, List<String> options,
+                        boolean showOnCard, String unit, boolean keyMetric) {
     }
 
     private final List<Field> fields;
@@ -54,8 +56,9 @@ public final class FieldSchema {
             String key = text(f, "key");
             String label = text(f, "label");
             String type = text(f, "type");
+            // key 可由后端自动生成（前端不再显示 key 输入框）
             if (key == null || key.isBlank()) {
-                throw new BusinessException(ResultCode.BAD_REQUEST, "字段 key 不能为空");
+                key = "f_" + UUID.randomUUID().toString().substring(0, 8);
             }
             if (label == null || label.isBlank()) {
                 throw new BusinessException(ResultCode.BAD_REQUEST, "字段 label 不能为空（key=" + key + "）");
@@ -80,7 +83,9 @@ public final class FieldSchema {
                 throw new BusinessException(ResultCode.BAD_REQUEST, "ENUM 字段必须提供非空 options（key=" + key + "）");
             }
             boolean showOnCard = f.has("showOnCard") && f.get("showOnCard").asBoolean(false);
-            result.add(new Field(key, label, type, required, options, showOnCard));
+            boolean keyMetric = f.has("keyMetric") && f.get("keyMetric").asBoolean(false);
+            String unit = text(f, "unit");
+            result.add(new Field(key, label, type, required, options, showOnCard, unit, keyMetric));
         }
         return new FieldSchema(result);
     }

@@ -43,7 +43,12 @@ public class MemberServiceImpl implements MemberService {
         List<Long> userIds = members.stream().map(ProjectMember::getUserId).toList();
         Map<Long, User> userById = userMapper.selectByIds(userIds).stream()
                 .collect(Collectors.toMap(User::getId, Function.identity()));
+        // 过滤掉 SUPER_ADMIN 用户（需求10：不显示在项目设置的人员列表里）
         return members.stream()
+                .filter(m -> {
+                    User u = userById.get(m.getUserId());
+                    return u != null && !"SUPER_ADMIN".equals(u.getSystemRole());
+                })
                 .map(m -> MemberVO.from(m, userById.get(m.getUserId())))
                 .toList();
     }

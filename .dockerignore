@@ -1,0 +1,10 @@
+target/
+.idea/
+*.iml
+node_modules/
+frontend/node_modules/
+.claude/
+memory-bank/
+CLAUDE.md
+video/
+*.log

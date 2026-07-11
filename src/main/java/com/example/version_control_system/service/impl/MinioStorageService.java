@@ -5,6 +5,8 @@ import com.example.version_control_system.config.MinioProperties;
 import com.example.version_control_system.exception.BusinessException;
 import com.example.version_control_system.service.StorageService;
 import io.minio.BucketExistsArgs;
+import io.minio.CopyObjectArgs;
+import io.minio.CopySource;
 import io.minio.GetObjectArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
@@ -74,6 +76,22 @@ public class MinioStorageService implements StorageService {
                     .build());
         } catch (Exception e) {
             throw new BusinessException(ResultCode.INTERNAL_ERROR, "文件删除失败：" + e.getMessage());
+        }
+    }
+
+    @Override
+    public String copy(String sourceKey, String destKey) {
+        ensureBucket();
+        try {
+            client.copyObject(CopyObjectArgs.builder()
+                    .bucket(bucket)
+                    .object(destKey)
+                    .source(CopySource.builder().bucket(bucket).object(sourceKey).build())
+                    .build());
+            return destKey;
+        } catch (Exception e) {
+            // 源对象不存在时返回 null，不抛异常
+            return null;
         }
     }
 }

@@ -77,4 +77,31 @@ public interface SimEntityMapper extends BaseMapper<SimEntity> {
               AND JSON_EXTRACT(attributes, CONCAT('$."', #{key}, '"')) IS NOT NULL
             """)
     Double maxNumberValue(@Param("projectId") Long projectId, @Param("key") String key);
+
+    /**
+     * 搜索实体 attributes 中指定字段值包含关键字的实体，可选时间范围过滤。
+     * 搜索字段：card_name、owner、result_conclusion、other_notes。
+     */
+    @Select("""
+            <script>
+            SELECT * FROM t_entity
+            WHERE project_id = #{projectId} AND deleted = 0
+              AND (
+                JSON_UNQUOTE(JSON_EXTRACT(attributes, '$."card_name"')) LIKE CONCAT('%', #{keyword}, '%')
+                OR JSON_UNQUOTE(JSON_EXTRACT(attributes, '$."owner"')) LIKE CONCAT('%', #{keyword}, '%')
+                OR JSON_UNQUOTE(JSON_EXTRACT(attributes, '$."result_conclusion"')) LIKE CONCAT('%', #{keyword}, '%')
+                OR JSON_UNQUOTE(JSON_EXTRACT(attributes, '$."other_notes"')) LIKE CONCAT('%', #{keyword}, '%')
+              )
+              <if test="startDate != null">
+                AND created_at &gt;= #{startDate}
+              </if>
+              <if test="endDate != null">
+                AND created_at &lt;= #{endDate}
+              </if>
+            </script>
+            """)
+    List<SimEntity> searchByKeywordAndDate(@Param("projectId") Long projectId,
+                                           @Param("keyword") String keyword,
+                                           @Param("startDate") String startDate,
+                                           @Param("endDate") String endDate);
 }

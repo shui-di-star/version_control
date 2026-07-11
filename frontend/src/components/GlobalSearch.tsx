@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { AutoComplete, Input } from 'antd';
+import { SearchOutlined, ClearOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { searchApi } from '@/api/misc';
 import { useProjectStore } from '@/stores/projectStore';
@@ -21,10 +22,12 @@ export default function GlobalSearch() {
   const setPathHighlight = useTreeStore((s) => s.setPathHighlight);
   const setSelectedEdgeFromSearch = useTreeStore((s) => s.setSelectedEdgeFromSearch);
   const [options, setOptions] = useState<{ value: string; label: string; hit: SearchHit }[]>([]);
+  const [keyword, setKeyword] = useState('');
 
-  const onSearch = async (keyword: string) => {
+  const doSearch = async () => {
     if (!currentProject || !keyword.trim()) {
       setOptions([]);
+      setSearchHits([]);
       return;
     }
     const hits = await searchApi.search(currentProject.id, keyword.trim());
@@ -38,15 +41,19 @@ export default function GlobalSearch() {
     );
   };
 
+  const clearSearch = () => {
+    setKeyword('');
+    setOptions([]);
+    setSearchHits([]);
+  };
+
   const onSelect = (_: string, opt: { hit: SearchHit }) => {
     const { hit } = opt;
     if (hit.sourceType === 'ENTITY' && hit.entityId) {
-      // 实体命中：选中该实体
       select(hit.entityId);
       setSelectedEdgeFromSearch(null);
       setPathHighlight([]);
     } else if ((hit.sourceType === 'RELATION' || hit.sourceType === 'PARENT_RELATION') && hit.fromEntityId && hit.toEntityId) {
-      // 关系命中：高亮两端节点 + 通知树视图选中该连线
       select(null);
       setPathHighlight([hit.fromEntityId, hit.toEntityId]);
       setSelectedEdgeFromSearch({
@@ -61,13 +68,33 @@ export default function GlobalSearch() {
 
   return (
     <AutoComplete
-      style={{ width: 260 }}
+      style={{ width: 280 }}
       options={options}
-      onSearch={onSearch}
       onSelect={onSelect}
       disabled={!currentProject}
+      value={keyword}
+      onChange={setKeyword}
     >
-      <Input.Search placeholder="全局搜索（名称/备注）" allowClear />
+      <Input
+        placeholder="搜索名称/负责人/结论/备注"
+        disabled={!currentProject}
+        onPressEnter={doSearch}
+        style={{ borderRadius: 'var(--radius)', background: '#fbfcfe' }}
+        suffix={
+          keyword.trim() ? (
+            <ClearOutlined
+              style={{ color: 'var(--muted)', cursor: 'pointer' }}
+              onClick={(e) => { e.stopPropagation(); clearSearch(); }}
+            />
+          ) : null
+        }
+        prefix={
+          <SearchOutlined
+            style={{ color: keyword.trim() ? 'var(--blue)' : 'var(--muted)', cursor: 'pointer' }}
+            onClick={doSearch}
+          />
+        }
+      />
     </AutoComplete>
   );
 }

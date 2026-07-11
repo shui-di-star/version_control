@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Menu, Modal, Select, Input, message } from 'antd';
+import { App, Menu, Select, Input } from 'antd';
 import { entityApi } from '@/api/entity';
 import { useProjectStore } from '@/stores/projectStore';
 import { useTreeStore } from '@/stores/treeStore';
@@ -31,6 +31,7 @@ function findNodeInfo(roots: EntityTreeNode[], targetId: string): { node: Entity
 }
 
 export default function NodeContextMenu({ nodeId, x, y, onClose, onCreateChild, onDelete, onRefresh }: Props) {
+  const { message, modal } = App.useApp();
   const containerRef = useRef<HTMLDivElement>(null);
   const pid = useProjectStore((s) => s.currentProject?.id);
   const canWrite = useProjectStore((s) => s.hasRole('EDITOR'));
@@ -72,7 +73,7 @@ export default function NodeContextMenu({ nodeId, x, y, onClose, onCreateChild, 
     let selectedTemplateId: string | undefined;
     let remark = '';
 
-    Modal.confirm({
+    modal.confirm({
       title,
       width: 480,
       content: (
@@ -125,7 +126,7 @@ export default function NodeContextMenu({ nodeId, x, y, onClose, onCreateChild, 
   const handleMoveDown = () => {
     // 下移 = 变为兄弟的子节点
     let selectedSiblingId: string | undefined;
-    Modal.confirm({
+    modal.confirm({
       title: '层级下移 — 选择目标兄弟节点',
       width: 480,
       content: (
@@ -155,7 +156,7 @@ export default function NodeContextMenu({ nodeId, x, y, onClose, onCreateChild, 
   const handleReparent = () => {
     // 自由选择新父节点 — 这里用简单文本输入节点ID(实际可改为 tree select)
     let inputParentId: string | null = null;
-    Modal.confirm({
+    modal.confirm({
       title: '重选父节点',
       width: 480,
       content: (

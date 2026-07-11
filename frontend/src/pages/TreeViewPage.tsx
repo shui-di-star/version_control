@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Layout, Button, Space, Empty, Modal, Radio, message, Typography } from 'antd';
+import { App, Empty, Radio, Typography, Space, Select, Input } from 'antd';
 import {
-  PlusOutlined,
-  ExpandOutlined,
-  DiffOutlined,
   LeftOutlined,
   RightOutlined,
 } from '@ant-design/icons';
@@ -11,21 +8,18 @@ import { entityApi } from '@/api/entity';
 import { relationApi } from '@/api/misc';
 import { entityTemplateApi, relationTemplateApi } from '@/api/template';
 import { useProjectStore } from '@/stores/projectStore';
-import { useTreeStore, type EdgeSearchTarget } from '@/stores/treeStore';
-import { computeVisibleIds } from '@/utils/tree';
+import { useTreeStore } from '@/stores/treeStore';
+import { computeVisibleIds, computeMatchedIds } from '@/utils/tree';
 import TreeGraph from '@/components/TreeGraph';
 import type { EdgeInfo, GraphHandle } from '@/components/TreeGraph';
 import GraphToolbar from '@/components/GraphToolbar';
 import DetailPanel from '@/components/DetailPanel';
 import EdgeDetailPanel from '@/components/EdgeDetailPanel';
 import CreateEntityModal from '@/components/CreateEntityModal';
-import CompareModal from '@/components/CompareModal';
+import CompareBar from '@/components/CompareBar';
 import NodeActions from '@/components/NodeActions';
-import StatsPanel from '@/components/StatsPanel';
-import FilterPanel from '@/components/FilterPanel';
+import LeftSidebar from '@/components/LeftSidebar';
 import type { ChildStrategy } from '@/types/api';
-
-const { Content } = Layout;
 
 const LEFT_DEFAULT = 220;
 const LEFT_MIN = 160;
@@ -115,6 +109,7 @@ function useResizer(
 }
 
 export default function TreeViewPage() {
+  const { message, modal } = App.useApp();
   const currentProject = useProjectStore((s) => s.currentProject);
   const canWrite = useProjectStore((s) => s.hasRole('EDITOR'));
   const pid = currentProject?.id;
@@ -133,12 +128,18 @@ export default function TreeViewPage() {
   const filter = useTreeStore((s) => s.filter);
   const pathHighlight = useTreeStore((s) => s.pathHighlight);
   const setPathHighlight = useTreeStore((s) => s.setPathHighlight);
+  const searchHits = useTreeStore((s) => s.searchHits);
   const selectedEdgeFromSearch = useTreeStore((s) => s.selectedEdgeFromSearch);
   const setSelectedEdgeFromSearch = useTreeStore((s) => s.setSelectedEdgeFromSearch);
+  const connectRelationTemplateId = useTreeStore((s) => s.connectRelationTemplateId);
+  const setConnectRelationTemplateId = useTreeStore((s) => s.setConnectRelationTemplateId);
+  const graphMode = useTreeStore((s) => s.graphMode);
+  const compareIds = useTreeStore((s) => s.compareIds);
+  const toggleCompare = useTreeStore((s) => s.toggleCompare);
+  const setCopySourceId = useTreeStore((s) => s.setCopySourceId);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createParent, setCreateParent] = useState<string | null>(null);
-  const [compareOpen, setCompareOpen] = useState(false);
   const [saveState, setSaveState] = useState<'saving' | 'saved' | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedEdge, setSelectedEdge] = useState<EdgeInfo | null>(null);
@@ -239,10 +240,45 @@ export default function TreeViewPage() {
     [tree, filter],
   );
 
+  const dimmedNodeIds = useMemo(
+    () => {
+      // Search-based dimming: when search hits exist, dim everything except matched entities
+      if (searchHits.length > 0) {
+        const matchedIds = new Set<string>();
+        for (const hit of searchHits) {
+          if (hit.entityId) matchedIds.add(hit.entityId);
+          if (hit.fromEntityId) matchedIds.add(hit.fromEntityId);
+          if (hit.toEntityId) matchedIds.add(hit.toEntityId);
+        }
+        const dimmed = new Set<string>();
+        visibleNodeIds.forEach((id) => {
+          if (!matchedIds.has(id)) dimmed.add(id);
+        });
+        return dimmed;
+      }
+      // Filter-based dimming
+      const matched = computeMatchedIds(tree, filter);
+      const dimmed = new Set<string>();
+      visibleNodeIds.forEach((id) => {
+        if (!matched.has(id)) dimmed.add(id);
+      });
+      return dimmed;
+    },
+    [tree, filter, visibleNodeIds, searchHits],
+  );
+
   const highlightIds = useMemo(() => {
     const ids = new Set(pathHighlight);
+    // Also highlight matched entities from search
+    if (searchHits.length > 0) {
+      for (const hit of searchHits) {
+        if (hit.entityId) ids.add(hit.entityId);
+        if (hit.fromEntityId) ids.add(hit.fromEntityId);
+        if (hit.toEntityId) ids.add(hit.toEntityId);
+      }
+    }
     return Array.from(ids);
-  }, [pathHighlight]);
+  }, [pathHighlight, searchHits]);
 
   const onDeleteEntity = (strategy: ChildStrategy) => {
     if (!pid || !selectedId) return;
@@ -255,7 +291,7 @@ export default function TreeViewPage() {
 
   const confirmDelete = () => {
     let strategy: ChildStrategy = 'CASCADE';
-    Modal.confirm({
+    modal.confirm({
       title: '删除节点',
       content: (
         <div>
@@ -272,14 +308,180 @@ export default function TreeViewPage() {
     });
   };
 
+  /** 连线模式：从 sourceId 拖到 targetId，弹窗选关系类型后执行 reparent */
+  const handleConnect = (sourceId: string, targetId: string) => {
+    if (!pid || !canWrite) return;
+
+    // 查找节点名称
+    const findName = (nodes: typeof tree, id: string): string => {
+      for (const n of nodes) {
+        if (n.id === id) return n.name;
+        const found = findName(n.children ?? [], id);
+        if (found) return found;
+      }
+      return id;
+    };
+    const sourceName = findName(tree, sourceId);
+    const targetName = findName(tree, targetId);
+
+    // 如果已在工具栏选好了关系模板，直接执行
+    if (connectRelationTemplateId) {
+      entityApi.reparent(pid, sourceId, {
+        parentId: targetId,
+        parentRelationTemplateId: connectRelationTemplateId,
+      }).then(() => {
+        message.success('连线成功');
+        refreshAll();
+      }).catch(() => {
+        message.error('连线失败');
+      });
+      return;
+    }
+
+    // 未选关系模板，弹窗让用户选
+    let selectedTemplateId: string | undefined;
+    let remark = '';
+    modal.confirm({
+      title: '建立父子关系',
+      width: 480,
+      content: (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ marginBottom: 12, fontSize: 13, color: '#666' }}>
+            将 <strong>{sourceName}</strong> 连接到 <strong>{targetName}</strong>（作为父节点）
+          </div>
+          <div style={{ marginBottom: 8 }}>
+            <label>关系类型（必填）：</label>
+            <Select
+              style={{ width: '100%' }}
+              placeholder="选择关系类型"
+              onChange={(v: string) => { selectedTemplateId = v; }}
+              options={relationTemplates.map((t) => ({ value: t.id, label: t.name }))}
+            />
+          </div>
+          <div style={{ marginBottom: 8 }}>
+            <label>备注（可选）：</label>
+            <Input.TextArea rows={2} onChange={(e) => { remark = e.target.value; }} />
+          </div>
+        </div>
+      ),
+      onOk: async () => {
+        if (!selectedTemplateId) {
+          message.error('请选择关系类型');
+          throw new Error('missing template');
+        }
+        await entityApi.reparent(pid, sourceId, {
+          parentId: targetId,
+          parentRelationTemplateId: selectedTemplateId,
+          parentRelationRemark: remark || undefined,
+        });
+        message.success('连线成功');
+        refreshAll();
+      },
+    });
+  };
+
   const handleSelectNode = (id: string) => {
     select(id);
     setSelectedEdge(null);
   };
 
-  const handleSelectEdge = (edge: EdgeInfo) => {
+  const handleSelectEdge = async (edge: EdgeInfo) => {
+    // 连线模式：点击父子连线时，更改其关系模板
+    if (connectRelationTemplateId && edge.type === 'parent' && canWrite && pid) {
+      try {
+        await entityApi.reparent(pid, edge.targetId, {
+          parentId: edge.sourceId,
+          parentRelationTemplateId: connectRelationTemplateId,
+        });
+        message.success('已更改连线关系类型');
+        setConnectRelationTemplateId(null);
+        refreshAll();
+        return;
+      } catch {
+        message.error('更改连线关系类型失败');
+        return;
+      }
+    }
     setSelectedEdge(edge);
     select(null);
+  };
+
+  /** 路径追溯：高亮从根到选中节点的路径 */
+  const handleTracePath = async () => {
+    if (!pid || !selectedId) return;
+    const path = await entityApi.path(pid, selectedId);
+    setPathHighlight(path.map((p) => p.id));
+    message.success(`已高亮根→当前路径（${path.length} 个节点）`);
+  };
+
+  const handleClearPath = () => {
+    setPathHighlight([]);
+  };
+
+  /** 拖放复制卡片到图谱 */
+  const handleDropCreate = async (rawData: string, dropTargetNodeId: string | null) => {
+    if (!pid || !canWrite) return;
+    try {
+      const data = JSON.parse(rawData) as {
+        sourceEntityId: string;
+        templateId: string;
+        name: string;
+        attributes: string;
+      };
+
+      if (dropTargetNodeId) {
+        // 拖到节点上 → 弹窗选关系模板 → 创建为子节点
+        let selectedTemplateId: string | undefined;
+        modal.confirm({
+          title: '创建副本为子节点',
+          width: 480,
+          content: (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ marginBottom: 12, fontSize: 13, color: '#666' }}>
+                将 <strong>{data.name}（副本）</strong> 创建为目标节点的子节点
+              </div>
+              <div>
+                <label>关系类型（必填）：</label>
+                <Select
+                  style={{ width: '100%' }}
+                  placeholder="选择关系类型"
+                  onChange={(v: string) => { selectedTemplateId = v; }}
+                  options={relationTemplates.map((t) => ({ value: t.id, label: t.name }))}
+                />
+              </div>
+            </div>
+          ),
+          onOk: async () => {
+            if (!selectedTemplateId) {
+              message.error('请选择关系类型');
+              throw new Error('missing template');
+            }
+            await entityApi.create(pid, {
+              templateId: data.templateId,
+              parentId: dropTargetNodeId,
+              name: data.name + '（副本）',
+              attributes: data.attributes,
+              parentRelationTemplateId: selectedTemplateId,
+            });
+            message.success('副本创建成功');
+            setCopySourceId(null);
+            refreshAll();
+          },
+        });
+      } else {
+        // 拖到空白处 → 创建为根节点
+        await entityApi.create(pid, {
+          templateId: data.templateId,
+          name: data.name + '（副本）',
+          attributes: data.attributes,
+        });
+        message.success('副本创建成功（单节点）');
+        setCopySourceId(null);
+        refreshAll();
+      }
+    } catch {
+      // JSON parse error or other
+    }
   };
 
   const leftResizer = useResizer(LEFT_DEFAULT, LEFT_MIN, LEFT_MAX, 'left');
@@ -307,48 +509,30 @@ export default function TreeViewPage() {
           style={{
             width: leftResizer.width,
             minWidth: leftResizer.width,
-            padding: 12,
-            borderRight: '1px solid #f0f0f0',
-            overflowY: 'auto',
-            background: '#fff',
+            borderRight: '1px solid var(--line)',
+            overflow: 'hidden',
+            background: 'var(--panel)',
           }}
         >
-          <Space direction="vertical" style={{ width: '100%' }}>
-            <Button
-              type="primary"
-              block
-              icon={<PlusOutlined />}
-              disabled={!canWrite}
-              onClick={() => {
-                setCreateParent(null);
-                setCreateOpen(true);
-              }}
-            >
-              新增根实体
-            </Button>
-            <Button
-              block
-              icon={<ExpandOutlined />}
-              onClick={() => setPathHighlight([])}
-              disabled={pathHighlight.length === 0}
-            >
-              清除路径高亮
-            </Button>
-            <Button block icon={<DiffOutlined />} onClick={() => setCompareOpen(true)}>
-              迭代对比
-            </Button>
-            <FilterPanel />
-          </Space>
+          <LeftSidebar
+            onCreateEntity={(parentId) => {
+              setCreateParent(parentId);
+              setCreateOpen(true);
+            }}
+            refreshKey={refreshKey}
+          />
           {selectedId && canWrite && (
-            <NodeActions
-              nodeId={selectedId}
-              onCreateChild={(parentId) => {
-                setCreateParent(parentId);
-                setCreateOpen(true);
-              }}
-              onDelete={confirmDelete}
-              onRefresh={refreshAll}
-            />
+            <div style={{ padding: '8px 12px', borderTop: '1px solid var(--line)' }}>
+              <NodeActions
+                nodeId={selectedId}
+                onCreateChild={(parentId) => {
+                  setCreateParent(parentId);
+                  setCreateOpen(true);
+                }}
+                onDelete={confirmDelete}
+                onRefresh={refreshAll}
+              />
+            </div>
           )}
         </div>
       )}
@@ -379,11 +563,15 @@ export default function TreeViewPage() {
       </div>
 
       {/* ---- 中间内容区 ---- */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <div style={{ padding: 8 }}>
-          <StatsPanel refreshKey={refreshKey} />
-        </div>
-        <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+        <GraphToolbar
+          graphRef={graphRef}
+          selectedId={selectedId}
+          onTracePath={handleTracePath}
+          onClearPath={handleClearPath}
+          hasPathHighlight={pathHighlight.length > 0}
+        />
+        <div style={{ flex: 1, position: 'relative', minHeight: 0, overflow: 'hidden' }}>
           {tree.length === 0 ? (
             <Empty style={{ marginTop: 80 }} description="空项目，请新增实体" />
           ) : (
@@ -395,12 +583,17 @@ export default function TreeViewPage() {
                 entityTemplates={entityTemplates}
                 relationTemplates={relationTemplates}
                 visibleNodeIds={visibleNodeIds}
+                dimmedNodeIds={dimmedNodeIds}
                 selectedId={selectedId}
                 highlightIds={highlightIds}
+                graphMode={graphMode}
                 onSelectNode={handleSelectNode}
                 onSelectEdge={handleSelectEdge}
+                onConnect={handleConnect}
+                compareIds={compareIds}
+                onToggleCompare={toggleCompare}
+                onDropCreate={handleDropCreate}
               />
-              <GraphToolbar graphRef={graphRef} selectedId={selectedId} />
             </>
           )}
         </div>
@@ -447,6 +640,8 @@ export default function TreeViewPage() {
             borderLeft: '1px solid #f0f0f0',
             background: '#fff',
             overflow: 'hidden',
+            position: 'relative',
+            zIndex: 2,
           }}
         >
           {selectedId && (
@@ -455,6 +650,7 @@ export default function TreeViewPage() {
               entityId={selectedId}
               onChanged={refreshAll}
               onSaveState={setSaveState}
+              onDelete={confirmDelete}
             />
           )}
           {selectedEdge && (
@@ -475,7 +671,7 @@ export default function TreeViewPage() {
           onCreated={refreshAll}
         />
       )}
-      <CompareModal open={compareOpen} onClose={() => setCompareOpen(false)} />
+      <CompareBar />
     </div>
   );
 }

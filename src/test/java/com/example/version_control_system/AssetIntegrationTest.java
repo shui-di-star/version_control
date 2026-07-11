@@ -91,7 +91,7 @@ class AssetIntegrationTest {
     private long createEntityTemplate(long projectId, String token) throws Exception {
         String schema = "{\"fields\":[{\"key\":\"m\",\"label\":\"m\",\"type\":\"NUMBER\"}]}";
         var body = objectMapper.writeValueAsString(
-                new com.example.version_control_system.dto.EntityTemplateRequest("模板", null, schema));
+                new com.example.version_control_system.dto.EntityTemplateRequest("模板", schema));
         MvcResult r = mockMvc.perform(post("/api/projects/{pid}/entity-templates", projectId)
                         .header("Authorization", bearer(token))
                         .contentType(MediaType.APPLICATION_JSON).content(body))

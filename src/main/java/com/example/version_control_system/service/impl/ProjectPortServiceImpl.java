@@ -13,7 +13,9 @@ import com.example.version_control_system.mapper.EntityTemplateMapper;
 import com.example.version_control_system.mapper.RelationMapper;
 import com.example.version_control_system.mapper.RelationTemplateMapper;
 import com.example.version_control_system.mapper.SimEntityMapper;
+import com.example.version_control_system.service.AttrImageRefService;
 import com.example.version_control_system.service.ProjectPortService;
+import com.example.version_control_system.service.StorageService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +23,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 项目导出/导入实现。
@@ -36,17 +41,23 @@ public class ProjectPortServiceImpl implements ProjectPortService {
     private final SimEntityMapper entityMapper;
     private final RelationMapper relationMapper;
     private final AssetMapper assetMapper;
+    private final StorageService storageService;
+    private final AttrImageRefService attrImageRefService;
 
     public ProjectPortServiceImpl(EntityTemplateMapper entityTemplateMapper,
                                   RelationTemplateMapper relationTemplateMapper,
                                   SimEntityMapper entityMapper,
                                   RelationMapper relationMapper,
-                                  AssetMapper assetMapper) {
+                                  AssetMapper assetMapper,
+                                  StorageService storageService,
+                                  AttrImageRefService attrImageRefService) {
         this.entityTemplateMapper = entityTemplateMapper;
         this.relationTemplateMapper = relationTemplateMapper;
         this.entityMapper = entityMapper;
         this.relationMapper = relationMapper;
         this.assetMapper = assetMapper;
+        this.storageService = storageService;
+        this.attrImageRefService = attrImageRefService;
     }
 
     @Override
@@ -54,7 +65,7 @@ public class ProjectPortServiceImpl implements ProjectPortService {
         List<ProjectExport.ExportEntityTemplate> ets = entityTemplateMapper.selectList(
                         new LambdaQueryWrapper<EntityTemplate>().eq(EntityTemplate::getProjectId, projectId))
                 .stream().map(t -> new ProjectExport.ExportEntityTemplate(
-                        t.getId(), t.getName(), t.getIcon(), t.getFieldSchema())).toList();
+                        t.getId(), t.getName(), t.getFieldSchema())).toList();
 
         List<ProjectExport.ExportRelationTemplate> rts = relationTemplateMapper.selectList(
                         new LambdaQueryWrapper<RelationTemplate>().eq(RelationTemplate::getProjectId, projectId))
@@ -86,16 +97,30 @@ public class ProjectPortServiceImpl implements ProjectPortService {
     @Override
     @Transactional
     public void importInto(Long projectId, ProjectExport data) {
+        // 前置检查：只有空项目才能导入
+        long entityCount = entityMapper.selectCount(new LambdaQueryWrapper<SimEntity>()
+                .eq(SimEntity::getProjectId, projectId));
+        if (entityCount > 0) {
+            throw new com.example.version_control_system.exception.BusinessException(
+                    com.example.version_control_system.common.ResultCode.BAD_REQUEST,
+                    "只能向空项目导入数据，当前项目已有实体");
+        }
+
         Map<Long, Long> entityTemplateIdMap = new HashMap<>();
         Map<Long, Long> relationTemplateIdMap = new HashMap<>();
         Map<Long, Long> entityIdMap = new HashMap<>();
+
+        // 0) 删除现有实体模板和关系模板（覆盖预设）
+        entityTemplateMapper.delete(new LambdaQueryWrapper<EntityTemplate>()
+                .eq(EntityTemplate::getProjectId, projectId));
+        relationTemplateMapper.delete(new LambdaQueryWrapper<RelationTemplate>()
+                .eq(RelationTemplate::getProjectId, projectId));
 
         // 1) 实体模板
         for (ProjectExport.ExportEntityTemplate t : nullSafe(data.entityTemplates())) {
             EntityTemplate row = new EntityTemplate();
             row.setProjectId(projectId);
             row.setName(t.name());
-            row.setIcon(t.icon());
             row.setFieldSchema(t.fieldSchema());
             entityTemplateMapper.insert(row);
             entityTemplateIdMap.put(t.id(), row.getId());
@@ -115,8 +140,36 @@ public class ProjectPortServiceImpl implements ProjectPortService {
         }
 
         // 3) 实体：先插入拿新 id（parent_id 暂置 null），记录映射
+        //    同时复制属性图片到新项目路径下
         List<ProjectExport.ExportEntity> entities = nullSafe(data.entities());
+        Pattern attrImagePattern = Pattern.compile("\"(p\\d+/attr/[^\"]+)\"");
         for (ProjectExport.ExportEntity e : entities) {
+            // 复制属性图片并改写 attributes 中的 objectKey
+            String attributes = e.attributes();
+            if (attributes != null && attributes.contains("/attr/")) {
+                Matcher m = attrImagePattern.matcher(attributes);
+                StringBuilder sb = new StringBuilder();
+                List<String> newImageKeys = new ArrayList<>();
+                while (m.find()) {
+                    String oldKey = m.group(1);
+                    String newKey = "p" + projectId + "/attr/" + UUID.randomUUID() + "-" + extractFileName(oldKey);
+                    String copied = storageService.copy(oldKey, newKey);
+                    if (copied != null) {
+                        m.appendReplacement(sb, "\"" + Matcher.quoteReplacement(newKey) + "\"");
+                        newImageKeys.add(newKey);
+                    } else {
+                        // 源文件不存在，保留原值（不可见但不破坏数据结构）
+                        m.appendReplacement(sb, Matcher.quoteReplacement(m.group()));
+                    }
+                }
+                m.appendTail(sb);
+                attributes = sb.toString();
+                // 为复制的图片建立引用计数
+                if (!newImageKeys.isEmpty()) {
+                    attrImageRefService.addRefs(projectId, newImageKeys);
+                }
+            }
+
             SimEntity row = new SimEntity();
             row.setProjectId(projectId);
             row.setTemplateId(entityTemplateIdMap.get(e.templateId()));
@@ -125,7 +178,7 @@ public class ProjectPortServiceImpl implements ProjectPortService {
             row.setStatus(e.status());
             row.setIsMilestone(e.isMilestone());
             row.setRemark(e.remark());
-            row.setAttributes(e.attributes());
+            row.setAttributes(attributes);
             entityMapper.insert(row);
             entityIdMap.put(e.id(), row.getId());
         }
@@ -155,13 +208,23 @@ public class ProjectPortServiceImpl implements ProjectPortService {
             relationMapper.insert(row);
         }
 
-        // 5) 产出物元信息（entity_id 按映射改写；对象仍指向原 object_key）
+        // 5) 产出物：复制 MinIO 对象到新项目路径下，使导入项目独立于源项目
         for (ProjectExport.ExportAsset a : nullSafe(data.assets())) {
+            Long newEntityId = entityIdMap.get(a.entityId());
+            String newObjectKey = null;
+            if (a.objectKey() != null && !a.objectKey().isBlank()) {
+                newObjectKey = "p" + projectId + "/e" + newEntityId + "/" + UUID.randomUUID() + "-" + extractFileName(a.objectKey());
+                String copied = storageService.copy(a.objectKey(), newObjectKey);
+                if (copied == null) {
+                    // 源文件不存在，仍保存元信息但 objectKey 置为原值（下载时会报错）
+                    newObjectKey = a.objectKey();
+                }
+            }
             Asset row = new Asset();
-            row.setEntityId(entityIdMap.get(a.entityId()));
+            row.setEntityId(newEntityId);
             row.setAssetType(a.assetType());
             row.setFileName(a.fileName());
-            row.setObjectKey(a.objectKey());
+            row.setObjectKey(newObjectKey);
             row.setContentText(a.contentText());
             row.setSize(a.size());
             row.setMimeType(a.mimeType());
@@ -194,5 +257,14 @@ public class ProjectPortServiceImpl implements ProjectPortService {
             mapped.add(String.valueOf(newId != null ? newId : oldId));
         }
         return "[" + String.join(",", mapped) + "]";
+    }
+
+    /** 从 objectKey 路径中提取文件名部分（最后一个 / 后面，去掉 UUID 前缀）。 */
+    private static String extractFileName(String objectKey) {
+        int lastSlash = objectKey.lastIndexOf('/');
+        String name = lastSlash >= 0 ? objectKey.substring(lastSlash + 1) : objectKey;
+        // objectKey 格式: uuid-originalFilename，取 uuid 后面的部分作为文件名
+        int dash = name.indexOf('-');
+        return dash >= 0 ? name.substring(dash + 1) : name;
     }
 }

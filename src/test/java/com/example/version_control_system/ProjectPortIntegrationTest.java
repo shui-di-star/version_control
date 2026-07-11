@@ -63,7 +63,7 @@ class ProjectPortIntegrationTest {
     private long createEntityTemplate(long projectId, String token) throws Exception {
         String schema = "{\"fields\":[{\"key\":\"mesh\",\"label\":\"网格\",\"type\":\"NUMBER\"}]}";
         var body = objectMapper.writeValueAsString(
-                new com.example.version_control_system.dto.EntityTemplateRequest("模板", null, schema));
+                new com.example.version_control_system.dto.EntityTemplateRequest("模板", schema));
         MvcResult r = mockMvc.perform(post("/api/projects/{pid}/entity-templates", projectId)
                         .header("Authorization", bearer(token))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -71,11 +71,19 @@ class ProjectPortIntegrationTest {
         return dataId(r);
     }
 
+    private long firstRelationTemplateId(long projectId, String token) throws Exception {
+        MvcResult r = mockMvc.perform(get("/api/projects/{pid}/relation-templates", projectId)
+                        .header("Authorization", bearer(token)))
+                .andExpect(status().isOk()).andReturn();
+        return objectMapper.readTree(r.getResponse().getContentAsString()).path("data").get(0).path("id").asLong();
+    }
+
     private long createEntity(long projectId, String token, long templateId, Long parentId, String name)
             throws Exception {
+        Long relTplId = parentId != null ? firstRelationTemplateId(projectId, token) : null;
         var body = objectMapper.writeValueAsString(
                 new com.example.version_control_system.dto.EntityCreateRequest(
-                        templateId, parentId, name, null, "{\"mesh\":1}", null, null));
+                        templateId, parentId, name, null, "{\"mesh\":1}", relTplId, null));
         MvcResult r = mockMvc.perform(post("/api/projects/{pid}/entities", projectId)
                         .header("Authorization", bearer(token))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -121,7 +129,7 @@ class ProjectPortIntegrationTest {
         JsonNode exportData = objectMapper.readTree(exportRes.getResponse().getContentAsString()).path("data");
         // 导出含全量数据
         assertThat(exportData.path("entityTemplates").size()).isEqualTo(1);
-        assertThat(exportData.path("relationTemplates").size()).isEqualTo(1);
+        assertThat(exportData.path("relationTemplates").size()).isEqualTo(5); // 4 preset + 1 created
         assertThat(exportData.path("entities").size()).isEqualTo(2);
         assertThat(exportData.path("relations").size()).isEqualTo(1);
 

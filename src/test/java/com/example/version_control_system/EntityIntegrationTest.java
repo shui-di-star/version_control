@@ -71,7 +71,7 @@ class EntityIntegrationTest {
                 + "{\"key\":\"solver\",\"label\":\"求解器\",\"type\":\"ENUM\",\"options\":[\"Abaqus\",\"Ansys\"]}"
                 + "]}";
         var body = objectMapper.writeValueAsString(
-                new com.example.version_control_system.dto.EntityTemplateRequest("模板", null, schema));
+                new com.example.version_control_system.dto.EntityTemplateRequest("模板", schema));
         MvcResult r = mockMvc.perform(post("/api/projects/{pid}/entity-templates", projectId)
                         .header("Authorization", bearer(token))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -79,12 +79,21 @@ class EntityIntegrationTest {
         return dataId(r);
     }
 
+    /** 获取项目中第一个关系模板 id（项目创建时自动带预设关系模板）。 */
+    private long firstRelationTemplateId(long projectId, String token) throws Exception {
+        MvcResult r = mockMvc.perform(get("/api/projects/{pid}/relation-templates", projectId)
+                        .header("Authorization", bearer(token)))
+                .andExpect(status().isOk()).andReturn();
+        return objectMapper.readTree(r.getResponse().getContentAsString()).path("data").get(0).path("id").asLong();
+    }
+
     /** 创建实体，返回响应（调用方自行断言）。 */
     private MvcResult createEntity(long projectId, String token, long templateId,
                                    Long parentId, String name, String attributes) throws Exception {
+        Long relTplId = parentId != null ? firstRelationTemplateId(projectId, token) : null;
         var body = objectMapper.writeValueAsString(
                 new com.example.version_control_system.dto.EntityCreateRequest(
-                        templateId, parentId, name, null, attributes, null, null));
+                        templateId, parentId, name, null, attributes, relTplId, null));
         return mockMvc.perform(post("/api/projects/{pid}/entities", projectId)
                         .header("Authorization", bearer(token))
                         .contentType(MediaType.APPLICATION_JSON).content(body))

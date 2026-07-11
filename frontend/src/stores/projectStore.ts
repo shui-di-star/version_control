@@ -14,11 +14,18 @@ interface ProjectState {
 
 const RANK: Record<ProjectRoleName, number> = { VIEWER: 1, EDITOR: 2, ADMIN: 3 };
 
+const LAST_PROJECT_KEY = 'vcs-last-project-id';
+
 export const useProjectStore = create<ProjectState>((set, getRaw) => ({
   projects: [],
   currentProject: null,
   setProjects: (projects) => set({ projects }),
-  setCurrentProject: (project) => set({ currentProject: project }),
+  setCurrentProject: (project) => {
+    if (project) {
+      localStorage.setItem(LAST_PROJECT_KEY, project.id);
+    }
+    set({ currentProject: project });
+  },
   currentRole: () => getRaw().currentProject?.myRole ?? null,
   hasRole: (required) => {
     const role = getRaw().currentProject?.myRole;
@@ -26,3 +33,8 @@ export const useProjectStore = create<ProjectState>((set, getRaw) => ({
     return RANK[role] >= RANK[required];
   },
 }));
+
+/** 获取上次使用的项目 ID（从 localStorage）。 */
+export function getLastProjectId(): string | null {
+  return localStorage.getItem(LAST_PROJECT_KEY);
+}

@@ -63,11 +63,8 @@ public class AttributeValidator {
                             "字段 " + key + " 取值不在 options 内：" + value.asString());
                 }
             }
-            case "FILE" -> {
-                require(value.isIntegralNumber(), key, "应为 asset id");
-                if (entityId != null) {
-                    checkFileOwnership(key, value.asLong(), entityId);
-                }
+            case "FILE", "IMAGE" -> {
+                require(value.isString(), key, "应为图片 objectKey 字符串");
             }
             default -> throw new BusinessException(ResultCode.BAD_REQUEST, "未知字段类型：" + field.type());
         }

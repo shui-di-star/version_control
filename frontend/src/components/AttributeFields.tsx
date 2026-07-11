@@ -1,15 +1,21 @@
-import { Form, Input, InputNumber, Select, DatePicker } from 'antd';
+import { useState } from 'react';
+import { Form, Input, InputNumber, Select, DatePicker, Upload, Button, App } from 'antd';
+import { UploadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import type { SchemaField } from '@/types/api';
+import { attrImageApi } from '@/api/misc';
 
-// 按模板 field_schema 动态渲染 Form.Item。FILE 类型此处以文本 id 承载（指向本实体产出物）。
-// 用于 Form 内：字段名前缀 attrs.<key>。
+// 按模板 field_schema 动态渲染 Form.Item。
+// IMAGE 类型：上传图片到独立的属性图片接口，存 objectKey 到 attributes JSON。
+// 与产出物（Asset）完全独立。
 export default function AttributeFields({
   fields,
   disabled,
+  projectId,
 }: {
   fields: SchemaField[];
   disabled?: boolean;
+  projectId?: string;
 }) {
   return (
     <>
@@ -33,8 +39,13 @@ export default function AttributeFields({
           case 'DATE':
             control = <DatePicker style={{ width: '100%' }} disabled={disabled} />;
             break;
-          case 'FILE':
-            control = <Input placeholder="产出物 id" disabled={disabled} />;
+          case 'IMAGE':
+            control = (
+              <ImageAttrField
+                disabled={disabled}
+                projectId={projectId}
+              />
+            );
             break;
           default:
             control = <Input disabled={disabled} />;
@@ -46,6 +57,64 @@ export default function AttributeFields({
         );
       })}
     </>
+  );
+}
+
+/** IMAGE 属性字段：受控组件，value/onChange 为 objectKey 字符串。 */
+function ImageAttrField({
+  value,
+  onChange,
+  disabled,
+  projectId,
+}: {
+  value?: string;
+  onChange?: (v: string | undefined) => void;
+  disabled?: boolean;
+  projectId?: string;
+}) {
+  const { message } = App.useApp();
+  const [uploading, setUploading] = useState(false);
+
+  const handleUpload = async (file: File) => {
+    if (!projectId) return;
+    setUploading(true);
+    try {
+      const res = await attrImageApi.upload(projectId, file);
+      onChange?.(res.objectKey);
+      message.success('图片已上传');
+    } catch {
+      message.error('图片上传失败');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div>
+      {value && projectId && (
+        <img
+          src={attrImageApi.previewUrl(projectId, value)}
+          alt="预览"
+          style={{ maxWidth: '100%', maxHeight: 200, borderRadius: 6, marginBottom: 8, display: 'block' }}
+        />
+      )}
+      {!disabled && projectId ? (
+        <Upload
+          showUploadList={false}
+          accept="image/*"
+          beforeUpload={(file) => {
+            handleUpload(file);
+            return false;
+          }}
+        >
+          <Button icon={<UploadOutlined />} loading={uploading} size="small">
+            {value ? '更换图片' : '上传图片'}
+          </Button>
+        </Upload>
+      ) : !projectId ? (
+        <span style={{ color: 'var(--muted)', fontSize: 12 }}>创建实体后可上传图片</span>
+      ) : null}
+    </div>
   );
 }
 
