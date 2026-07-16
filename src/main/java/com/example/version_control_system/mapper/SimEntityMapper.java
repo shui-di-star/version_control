@@ -79,8 +79,8 @@ public interface SimEntityMapper extends BaseMapper<SimEntity> {
     Double maxNumberValue(@Param("projectId") Long projectId, @Param("key") String key);
 
     /**
-     * 搜索实体 attributes 中指定字段值包含关键字的实体，可选时间范围过滤。
-     * 搜索字段：card_name、owner、result_conclusion、other_notes。
+     * 搜索实体 attributes 中指定字段值包含关键字的实体，或 remark 包含关键字，可选时间范围过滤。
+     * 搜索字段：card_name、owner、conclusion_suggestion、remark。
      */
     @Select("""
             <script>
@@ -89,8 +89,8 @@ public interface SimEntityMapper extends BaseMapper<SimEntity> {
               AND (
                 JSON_UNQUOTE(JSON_EXTRACT(attributes, '$."card_name"')) LIKE CONCAT('%', #{keyword}, '%')
                 OR JSON_UNQUOTE(JSON_EXTRACT(attributes, '$."owner"')) LIKE CONCAT('%', #{keyword}, '%')
-                OR JSON_UNQUOTE(JSON_EXTRACT(attributes, '$."result_conclusion"')) LIKE CONCAT('%', #{keyword}, '%')
-                OR JSON_UNQUOTE(JSON_EXTRACT(attributes, '$."other_notes"')) LIKE CONCAT('%', #{keyword}, '%')
+                OR JSON_UNQUOTE(JSON_EXTRACT(attributes, '$."conclusion_suggestion"')) LIKE CONCAT('%', #{keyword}, '%')
+                OR remark LIKE CONCAT('%', #{keyword}, '%')
               )
               <if test="startDate != null">
                 AND created_at &gt;= #{startDate}

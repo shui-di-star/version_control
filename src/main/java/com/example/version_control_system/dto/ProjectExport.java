@@ -11,7 +11,9 @@ public record ProjectExport(
         List<ExportRelationTemplate> relationTemplates,
         List<ExportEntity> entities,
         List<ExportRelation> relations,
-        List<ExportAsset> assets) {
+        List<ExportAsset> assets,
+        List<ExportEdgeRemark> edgeRemarks,
+        List<ExportEdgeRemarkImage> edgeRemarkImages) {
 
     public record ExportEntityTemplate(Long id, String name, String fieldSchema) {
     }
@@ -21,7 +23,8 @@ public record ProjectExport(
     }
 
     public record ExportEntity(Long id, Long templateId, Long parentId, String name, String status,
-                               Integer isMilestone, String remark, String attributes) {
+                               Integer isMilestone, String remark, String attributes,
+                               Long parentRelationTemplateId) {
     }
 
     public record ExportRelation(Long id, Long templateId, Long fromEntityId, Long toEntityId, String remark) {
@@ -29,5 +32,12 @@ public record ProjectExport(
 
     public record ExportAsset(Long id, Long entityId, String assetType, String fileName, String objectKey,
                               String contentText, Long size, String mimeType) {
+    }
+
+    public record ExportEdgeRemark(Long id, Long entityId, String content, Integer sortOrder) {
+    }
+
+    public record ExportEdgeRemarkImage(Long id, Long remarkId, String fileName, String objectKey,
+                                        Long size, String mimeType, Integer sortOrder) {
     }
 }

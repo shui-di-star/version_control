@@ -95,6 +95,18 @@ export interface SchemaField {
   unit?: string;
   compareInCard?: boolean;
   keyMetric?: boolean;
+  /** 卡片上属性名字体大小 (默认11) */
+  cardLabelFontSize?: number;
+  /** 卡片上属性名颜色 (默认#657386) */
+  cardLabelColor?: string;
+  /** 卡片上属性名加粗 */
+  cardLabelBold?: boolean;
+  /** 卡片上属性值字体大小 (默认13) */
+  cardValueFontSize?: number;
+  /** 卡片上属性值颜色 (默认#17202a) */
+  cardValueColor?: string;
+  /** 卡片上属性值加粗 */
+  cardValueBold?: boolean;
 }
 
 /** field_schema JSON 顶层结构。 */
@@ -261,4 +273,24 @@ export interface ProjectExport {
   entities: unknown[];
   relations: unknown[];
   assets: unknown[];
+  edgeRemarks: unknown[];
+  edgeRemarkImages: unknown[];
+}
+
+// ---------- 连线备注 ----------
+export interface EdgeRemarkImageVO {
+  id: string;
+  fileName: string;
+  objectKey: string;
+  size?: number;
+  mimeType?: string;
+}
+
+export interface EdgeRemarkVO {
+  id: string;
+  entityId: string;
+  content: string;
+  sortOrder: number;
+  images: EdgeRemarkImageVO[];
+  createdAt: string;
 }

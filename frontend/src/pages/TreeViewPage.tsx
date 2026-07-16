@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { App, Empty, Radio, Typography, Space, Select, Input } from 'antd';
+import { App, Empty, Radio, Typography, Space, Select } from 'antd';
 import {
   LeftOutlined,
   RightOutlined,
@@ -315,7 +315,7 @@ export default function TreeViewPage() {
     // 查找节点名称
     const findName = (nodes: typeof tree, id: string): string => {
       for (const n of nodes) {
-        if (n.id === id) return n.name;
+        if (String(n.id) === String(id)) return n.name;
         const found = findName(n.children ?? [], id);
         if (found) return found;
       }
@@ -340,7 +340,6 @@ export default function TreeViewPage() {
 
     // 未选关系模板，弹窗让用户选
     let selectedTemplateId: string | undefined;
-    let remark = '';
     modal.confirm({
       title: '建立父子关系',
       width: 480,
@@ -358,10 +357,6 @@ export default function TreeViewPage() {
               options={relationTemplates.map((t) => ({ value: t.id, label: t.name }))}
             />
           </div>
-          <div style={{ marginBottom: 8 }}>
-            <label>备注（可选）：</label>
-            <Input.TextArea rows={2} onChange={(e) => { remark = e.target.value; }} />
-          </div>
         </div>
       ),
       onOk: async () => {
@@ -372,7 +367,6 @@ export default function TreeViewPage() {
         await entityApi.reparent(pid, sourceId, {
           parentId: targetId,
           parentRelationTemplateId: selectedTemplateId,
-          parentRelationRemark: remark || undefined,
         });
         message.success('连线成功');
         refreshAll();
@@ -572,6 +566,16 @@ export default function TreeViewPage() {
           hasPathHighlight={pathHighlight.length > 0}
         />
         <div style={{ flex: 1, position: 'relative', minHeight: 0, overflow: 'hidden' }}>
+          {graphMode === 'connect' && (
+            <div style={{
+              position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)',
+              zIndex: 10, background: '#e6f7ff', border: '1px solid #91d5ff',
+              borderRadius: 6, padding: '6px 16px', fontSize: 13, color: '#0050b3',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)', pointerEvents: 'none',
+            }}>
+              从子节点出发连接父节点
+            </div>
+          )}
           {tree.length === 0 ? (
             <Empty style={{ marginTop: 80 }} description="空项目，请新增实体" />
           ) : (

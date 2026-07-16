@@ -1,7 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Graph, treeToGraphData } from '@antv/g6';
 import type { GraphData, TreeData, IElementEvent, EdgeData } from '@antv/g6';
-import type { EntityTemplateVO, EntityTreeNode, RelationTemplateVO, RelationVO, FieldSchema } from '@/types/api';
+import type { EntityTemplateVO, EntityTreeNode, RelationTemplateVO, RelationVO, FieldSchema, SchemaField } from '@/types/api';
 import type { GraphMode } from '@/stores/treeStore';
 import { STATUS_META } from '@/utils/constants';
 import { safeParse } from '@/utils/json';
@@ -10,6 +10,17 @@ interface LineStyle {
   color?: string;
   dash?: boolean;
   width?: number;
+}
+
+interface CardMetric {
+  label: string;
+  value: string;
+  labelFontSize: number;
+  labelColor: string;
+  labelBold: boolean;
+  valueFontSize: number;
+  valueColor: string;
+  valueBold: boolean;
 }
 
 interface Props {
@@ -55,21 +66,30 @@ function nd(d: Record<string, unknown>, key: string): any {
   return (d as any)?.[key];
 }
 
-function getShowOnCardText(node: EntityTreeNode, entityTemplates: EntityTemplateVO[]): string {
+function getShowOnCardMetrics(node: EntityTreeNode, entityTemplates: EntityTemplateVO[]): CardMetric[] {
   const tpl = entityTemplates.find((t) => t.id === node.templateId);
-  if (!tpl?.fieldSchema) return '';
+  if (!tpl?.fieldSchema) return [];
   const schema = safeParse<FieldSchema>(tpl.fieldSchema, { fields: [] });
-  const cardFields = schema.fields?.filter((f) => f.showOnCard && f.key !== 'card_name') ?? [];
-  if (cardFields.length === 0) return '';
+  const cardFields = schema.fields?.filter((f: SchemaField) => f.showOnCard && f.key !== 'card_name') ?? [];
+  if (cardFields.length === 0) return [];
   const attrs = safeParse<Record<string, unknown>>(node.attributes, {});
-  const parts: string[] = [];
+  const metrics: CardMetric[] = [];
   for (const f of cardFields) {
     const val = attrs[f.key];
     if (val != null && val !== '') {
-      parts.push(`${f.label}: ${val}`);
+      metrics.push({
+        label: f.label + (f.unit ? ` (${f.unit})` : ''),
+        value: String(val),
+        labelFontSize: f.cardLabelFontSize ?? 11,
+        labelColor: f.cardLabelColor ?? '#657386',
+        labelBold: f.cardLabelBold ?? false,
+        valueFontSize: f.cardValueFontSize ?? 13,
+        valueColor: f.cardValueColor ?? '#17202a',
+        valueBold: f.cardValueBold ?? true,
+      });
     }
   }
-  return parts.join('\n');
+  return metrics;
 }
 
 /** 生成节点卡片 HTML（对齐示例项目的 .node 风格） */
@@ -77,7 +97,7 @@ function buildCardHTML(d: Record<string, unknown>): string {
   const name = String(nd(d, 'name') ?? d.id);
   const status = nd(d, 'status') as string | null;
   const isMilestone = nd(d, 'isMilestone') === 1;
-  const cardText = nd(d, 'showOnCardText') as string;
+  const metrics = (nd(d, 'showOnCardMetrics') as CardMetric[] | null) ?? [];
   const childCount = (nd(d, 'childCount') as number) ?? 0;
   const collapsed = nd(d, 'collapsed') === true;
   const cardNumber = nd(d, 'cardNumber') as string;
@@ -118,14 +138,15 @@ function buildCardHTML(d: Record<string, unknown>): string {
       transition:all 0.15s;font-size:10px;color:#fff;
     ">${isCompared ? '✓' : ''}</span>`;
 
-  // 指标区（showOnCard 属性）
-  const metricsHtml = cardText
-    ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 8px;padding:4px 0;margin-top:4px">
-        ${cardText.split('\n').map((line: string) => {
-          const [label, ...valParts] = line.split(': ');
-          const val = valParts.join(': ');
-          return `<div><div style="font-size:11px;color:#657386">${(label ?? '').replace(/</g, '&lt;')}</div><div style="font-size:13px;font-weight:600;color:#17202a">${(val ?? '').replace(/</g, '&lt;')}</div></div>`;
-        }).join('')}
+  // 指标区（showOnCard 属性）— 方框样式
+  const metricsHtml = metrics.length > 0
+    ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:4px 0;margin-top:4px">
+        ${metrics.map((m: CardMetric) =>
+          `<div style="border:1px solid #d8e0ea;border-radius:6px;background:#fbfcfe;padding:6px 8px">
+            <div style="font-size:${m.labelFontSize}px;color:${m.labelColor};font-weight:${m.labelBold ? 700 : 400};line-height:1.3">${m.label.replace(/</g, '&lt;')}</div>
+            <div style="font-size:${m.valueFontSize}px;color:${m.valueColor};font-weight:${m.valueBold ? 700 : 400};margin-top:2px;line-height:1.3">${m.value.replace(/</g, '&lt;')}</div>
+          </div>`
+        ).join('')}
        </div>`
     : '';
 
@@ -179,7 +200,7 @@ function buildTreeData(roots: EntityTreeNode[], visible: Set<string>, dimmed: Se
       isMilestone: n.isMilestone ?? 0,
       parentRelationTemplateId: n.parentRelationTemplateId ?? null,
       parentRelationRemark: n.parentRelationRemark ?? null,
-      showOnCardText: getShowOnCardText(n, entityTemplates),
+      showOnCardMetrics: getShowOnCardMetrics(n, entityTemplates),
       cardNumber: String(attrs.card_number ?? ''),
       childCount: visibleChildren.length,
       collapsed: isCollapsed,
@@ -317,10 +338,9 @@ const TreeGraph = forwardRef<GraphHandle, Props>(function TreeGraph({
           type: 'html',
           style: {
             size: (d: Record<string, unknown>) => {
-              const cardText = nd(d, 'showOnCardText') as string;
-              const lines = cardText ? cardText.split('\n').length : 0;
+              const metrics = (nd(d, 'showOnCardMetrics') as CardMetric[] | null) ?? [];
               const baseHeight = 80; // top + title + badge
-              const metricsHeight = lines > 0 ? Math.ceil(lines / 2) * 44 + 8 : 0;
+              const metricsHeight = metrics.length > 0 ? Math.ceil(metrics.length / 2) * 52 + 12 : 0;
               return [216, baseHeight + metricsHeight];
             },
             innerHTML: (d: Record<string, unknown>) => buildCardHTML(d),
@@ -338,7 +358,9 @@ const TreeGraph = forwardRef<GraphHandle, Props>(function TreeGraph({
               stroke: color,
               lineWidth: isRecommended ? Math.max(baseWidth, 2.6) : baseWidth,
               lineDash: data.lineDash ? [4, 4] : undefined,
-              endArrow: data.directed ?? false,
+              endArrow: data.parentEdge
+                ? { type: 'triangle', size: 6 } as any
+                : (data.directed ? { type: 'triangle', size: 6 } as any : false),
               opacity: edgeDimmed ? 0.2 : 1,
               labelText: data.templateName ?? '',
               labelFontSize: 11,
@@ -408,6 +430,34 @@ const TreeGraph = forwardRef<GraphHandle, Props>(function TreeGraph({
         }
       });
       graph.render().catch(() => undefined);
+
+      // Issue 5: 反向缩放 HTML 节点内容，防止放大后文字模糊
+      const fixHtmlClarity = () => {
+        const container = containerRef.current;
+        if (!container || !graph) return;
+        const zoom = graph.getZoom();
+        // G6 html 节点的 wrapper div 被 CSS transform 缩放，导致位图化模糊。
+        // 遍历所有 html 节点 wrapper，将内部内容反向缩放至 1:1 像素渲染。
+        const wrappers = container.querySelectorAll<HTMLElement>('[data-node-id]');
+        wrappers.forEach((card) => {
+          const wrapper = card.parentElement;
+          if (!wrapper) return;
+          // 第一次记录原始尺寸，后续使用原始值计算避免累积误差
+          if (!wrapper.dataset.origW) {
+            wrapper.dataset.origW = String(parseFloat(wrapper.style.width) || 216);
+            wrapper.dataset.origH = String(parseFloat(wrapper.style.height) || 80);
+          }
+          const origW = parseFloat(wrapper.dataset.origW!);
+          const origH = parseFloat(wrapper.dataset.origH!);
+          wrapper.style.width = `${origW * zoom}px`;
+          wrapper.style.height = `${origH * zoom}px`;
+          card.style.transform = `scale(${zoom})`;
+          card.style.transformOrigin = '0 0';
+          card.style.willChange = 'transform';
+        });
+      };
+      graph.on('afterrender', fixHtmlClarity);
+      graph.on('afterviewportchange', fixHtmlClarity);
     }, 0);
     return () => {
       window.clearTimeout(timer);

@@ -4,11 +4,15 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.example.version_control_system.dto.ProjectExport;
 import com.example.version_control_system.entity.Asset;
+import com.example.version_control_system.entity.EdgeRemark;
+import com.example.version_control_system.entity.EdgeRemarkImage;
 import com.example.version_control_system.entity.EntityTemplate;
 import com.example.version_control_system.entity.Relation;
 import com.example.version_control_system.entity.RelationTemplate;
 import com.example.version_control_system.entity.SimEntity;
 import com.example.version_control_system.mapper.AssetMapper;
+import com.example.version_control_system.mapper.EdgeRemarkImageMapper;
+import com.example.version_control_system.mapper.EdgeRemarkMapper;
 import com.example.version_control_system.mapper.EntityTemplateMapper;
 import com.example.version_control_system.mapper.RelationMapper;
 import com.example.version_control_system.mapper.RelationTemplateMapper;
@@ -41,6 +45,8 @@ public class ProjectPortServiceImpl implements ProjectPortService {
     private final SimEntityMapper entityMapper;
     private final RelationMapper relationMapper;
     private final AssetMapper assetMapper;
+    private final EdgeRemarkMapper edgeRemarkMapper;
+    private final EdgeRemarkImageMapper edgeRemarkImageMapper;
     private final StorageService storageService;
     private final AttrImageRefService attrImageRefService;
 
@@ -49,6 +55,8 @@ public class ProjectPortServiceImpl implements ProjectPortService {
                                   SimEntityMapper entityMapper,
                                   RelationMapper relationMapper,
                                   AssetMapper assetMapper,
+                                  EdgeRemarkMapper edgeRemarkMapper,
+                                  EdgeRemarkImageMapper edgeRemarkImageMapper,
                                   StorageService storageService,
                                   AttrImageRefService attrImageRefService) {
         this.entityTemplateMapper = entityTemplateMapper;
@@ -56,6 +64,8 @@ public class ProjectPortServiceImpl implements ProjectPortService {
         this.entityMapper = entityMapper;
         this.relationMapper = relationMapper;
         this.assetMapper = assetMapper;
+        this.edgeRemarkMapper = edgeRemarkMapper;
+        this.edgeRemarkImageMapper = edgeRemarkImageMapper;
         this.storageService = storageService;
         this.attrImageRefService = attrImageRefService;
     }
@@ -77,7 +87,8 @@ public class ProjectPortServiceImpl implements ProjectPortService {
                 new LambdaQueryWrapper<SimEntity>().eq(SimEntity::getProjectId, projectId));
         List<ProjectExport.ExportEntity> entities = entityRows.stream().map(e ->
                 new ProjectExport.ExportEntity(e.getId(), e.getTemplateId(), e.getParentId(), e.getName(),
-                        e.getStatus(), e.getIsMilestone(), e.getRemark(), e.getAttributes())).toList();
+                        e.getStatus(), e.getIsMilestone(), e.getRemark(), e.getAttributes(),
+                        e.getParentRelationTemplateId())).toList();
 
         List<Relation> relationRows = relationMapper.selectList(
                 new LambdaQueryWrapper<Relation>().eq(Relation::getProjectId, projectId));
@@ -91,7 +102,20 @@ public class ProjectPortServiceImpl implements ProjectPortService {
                 .stream().map(a -> new ProjectExport.ExportAsset(a.getId(), a.getEntityId(), a.getAssetType(),
                         a.getFileName(), a.getObjectKey(), a.getContentText(), a.getSize(), a.getMimeType())).toList();
 
-        return new ProjectExport(ets, rts, entities, relations, assets);
+        // 连线备注
+        List<EdgeRemark> remarkRows = edgeRemarkMapper.selectList(
+                new LambdaQueryWrapper<EdgeRemark>().eq(EdgeRemark::getProjectId, projectId));
+        List<ProjectExport.ExportEdgeRemark> edgeRemarks = remarkRows.stream().map(r ->
+                new ProjectExport.ExportEdgeRemark(r.getId(), r.getEntityId(), r.getContent(), r.getSortOrder())).toList();
+
+        // 连线备注图片
+        List<Long> remarkIds = remarkRows.stream().map(EdgeRemark::getId).toList();
+        List<ProjectExport.ExportEdgeRemarkImage> edgeRemarkImages = remarkIds.isEmpty() ? List.of()
+                : edgeRemarkImageMapper.selectList(new LambdaQueryWrapper<EdgeRemarkImage>().in(EdgeRemarkImage::getRemarkId, remarkIds))
+                .stream().map(img -> new ProjectExport.ExportEdgeRemarkImage(img.getId(), img.getRemarkId(),
+                        img.getFileName(), img.getObjectKey(), img.getSize(), img.getMimeType(), img.getSortOrder())).toList();
+
+        return new ProjectExport(ets, rts, entities, relations, assets, edgeRemarks, edgeRemarkImages);
     }
 
     @Override
@@ -179,6 +203,8 @@ public class ProjectPortServiceImpl implements ProjectPortService {
             row.setIsMilestone(e.isMilestone());
             row.setRemark(e.remark());
             row.setAttributes(attributes);
+            row.setParentRelationTemplateId(e.parentRelationTemplateId() != null
+                    ? relationTemplateIdMap.get(e.parentRelationTemplateId()) : null);
             entityMapper.insert(row);
             entityIdMap.put(e.id(), row.getId());
         }
@@ -229,6 +255,42 @@ public class ProjectPortServiceImpl implements ProjectPortService {
             row.setSize(a.size());
             row.setMimeType(a.mimeType());
             assetMapper.insert(row);
+        }
+
+        // 6) 连线备注
+        Map<Long, Long> edgeRemarkIdMap = new HashMap<>();
+        for (ProjectExport.ExportEdgeRemark er : nullSafe(data.edgeRemarks())) {
+            Long newEntityId = entityIdMap.get(er.entityId());
+            if (newEntityId == null) continue;
+            EdgeRemark row = new EdgeRemark();
+            row.setEntityId(newEntityId);
+            row.setProjectId(projectId);
+            row.setContent(er.content());
+            row.setSortOrder(er.sortOrder());
+            edgeRemarkMapper.insert(row);
+            edgeRemarkIdMap.put(er.id(), row.getId());
+        }
+
+        // 7) 连线备注图片：复制 MinIO 对象到新路径
+        for (ProjectExport.ExportEdgeRemarkImage img : nullSafe(data.edgeRemarkImages())) {
+            Long newRemarkId = edgeRemarkIdMap.get(img.remarkId());
+            if (newRemarkId == null) continue;
+            String newObjectKey = null;
+            if (img.objectKey() != null && !img.objectKey().isBlank()) {
+                newObjectKey = "p" + projectId + "/edge-remark/" + UUID.randomUUID() + "-" + extractFileName(img.objectKey());
+                String copied = storageService.copy(img.objectKey(), newObjectKey);
+                if (copied == null) {
+                    newObjectKey = img.objectKey();
+                }
+            }
+            EdgeRemarkImage row = new EdgeRemarkImage();
+            row.setRemarkId(newRemarkId);
+            row.setFileName(img.fileName());
+            row.setObjectKey(newObjectKey);
+            row.setSize(img.size());
+            row.setMimeType(img.mimeType());
+            row.setSortOrder(img.sortOrder());
+            edgeRemarkImageMapper.insert(row);
         }
     }
 

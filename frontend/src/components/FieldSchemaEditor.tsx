@@ -1,5 +1,5 @@
-import { useRef } from 'react';
-import { Button, Input, Select, Checkbox, Space } from 'antd';
+import React, { useRef } from 'react';
+import { Button, Input, Select, Checkbox, Space, InputNumber, ColorPicker } from 'antd';
 import { DeleteOutlined, PlusOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons';
 import type { SchemaField } from '@/types/api';
 import { FIELD_TYPES, FIELD_TYPE_LABEL } from '@/utils/constants';
@@ -25,17 +25,25 @@ export default function FieldSchemaEditor({ value, onChange }: Props) {
   // 合并 _rid 用于渲染（不回传给 onChange）
   const rows: Row[] = value.map((f, i) => ({ ...f, _rid: rids.current[i] }));
 
+  /** 为 IMAGE 字段生成稳定 key（不随 label 变化）。 */
+  const genImageKey = () => `img_${(++uidSeq).toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+
   const update = (idx: number, patch: Partial<SchemaField>) => {
     const next = value.map((f, i) => {
       if (i !== idx) return f;
       const merged = { ...f, ...patch };
-      if ('label' in patch && (!f.key || f.key === f.label)) {
+      // label → key 自动同步：仅对非 IMAGE 字段生效
+      if ('label' in patch && (!f.key || f.key === f.label) && f.type !== 'IMAGE' && !f.key?.startsWith('img_')) {
         merged.key = patch.label ?? '';
       }
       if ('type' in patch && patch.type === 'IMAGE') {
         merged.showOnCard = false;
         merged.compareInCard = false;
         merged.keyMetric = false;
+        // 切换为 IMAGE 时，生成稳定 key（如果还没有 img_ 前缀）
+        if (!merged.key?.startsWith('img_')) {
+          merged.key = genImageKey();
+        }
       }
       // NUMBER/ENUM 新切换时默认勾选关键指标、展示在卡片上、参与对比
       if ('type' in patch && (patch.type === 'NUMBER' || patch.type === 'ENUM')) {
@@ -96,7 +104,8 @@ export default function FieldSchemaEditor({ value, onChange }: Props) {
         </thead>
         <tbody>
           {rows.map((row, i) => (
-            <tr key={row._rid} style={{ borderTop: '1px solid var(--line, #f0f0f0)' }}>
+            <React.Fragment key={row._rid}>
+            <tr style={{ borderTop: '1px solid var(--line, #f0f0f0)' }}>
               <td style={{ padding: '4px' }}>
                 <Input
                   value={row.label}
@@ -187,6 +196,43 @@ export default function FieldSchemaEditor({ value, onChange }: Props) {
                 <Button type="text" size="small" icon={<ArrowDownOutlined />} disabled={i === rows.length - 1} onClick={() => moveDown(i)} />
               </td>
             </tr>
+            {row.showOnCard && row.key !== 'card_name' && (
+              <tr style={{ background: '#fafbfc' }}>
+                <td colSpan={10} style={{ padding: '6px 8px 8px' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 16px', alignItems: 'center', fontSize: 12 }}>
+                    <span style={{ color: '#657386', fontWeight: 600 }}>卡片样式:</span>
+                    <span style={{ color: '#888' }}>属性名</span>
+                    <Space size={4}>
+                      <span>字号</span>
+                      <InputNumber size="small" min={8} max={24} value={row.cardLabelFontSize ?? 11} style={{ width: 56 }}
+                        onChange={(v) => update(i, { cardLabelFontSize: v ?? 11 })} />
+                    </Space>
+                    <Space size={4}>
+                      <span>颜色</span>
+                      <ColorPicker size="small" value={row.cardLabelColor ?? '#657386'}
+                        onChange={(c) => update(i, { cardLabelColor: c.toHexString() })} />
+                    </Space>
+                    <Checkbox checked={row.cardLabelBold ?? false}
+                      onChange={(e) => update(i, { cardLabelBold: e.target.checked })}>加粗</Checkbox>
+                    <span style={{ borderLeft: '1px solid #e0e0e0', height: 16, display: 'inline-block' }} />
+                    <span style={{ color: '#888' }}>属性值</span>
+                    <Space size={4}>
+                      <span>字号</span>
+                      <InputNumber size="small" min={8} max={24} value={row.cardValueFontSize ?? 13} style={{ width: 56 }}
+                        onChange={(v) => update(i, { cardValueFontSize: v ?? 13 })} />
+                    </Space>
+                    <Space size={4}>
+                      <span>颜色</span>
+                      <ColorPicker size="small" value={row.cardValueColor ?? '#17202a'}
+                        onChange={(c) => update(i, { cardValueColor: c.toHexString() })} />
+                    </Space>
+                    <Checkbox checked={row.cardValueBold ?? true}
+                      onChange={(e) => update(i, { cardValueBold: e.target.checked })}>加粗</Checkbox>
+                  </div>
+                </td>
+              </tr>
+            )}
+            </React.Fragment>
           ))}
         </tbody>
       </table>

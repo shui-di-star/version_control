@@ -30,8 +30,7 @@ public class EntityTemplateServiceImpl implements EntityTemplateService {
               {"key":"card_name","label":"卡片名称","type":"TEXT","required":true,"showOnCard":true},
               {"key":"time","label":"时间","type":"DATE","required":false,"showOnCard":false},
               {"key":"owner","label":"负责人","type":"TEXT","required":false,"showOnCard":true},
-              {"key":"result_conclusion","label":"结果结论","type":"TEXT","required":false,"showOnCard":false},
-              {"key":"other_notes","label":"其他备注","type":"TEXT","required":false,"showOnCard":false}
+              {"key":"conclusion_suggestion","label":"结论及建议","type":"TEXT","required":false,"showOnCard":false}
             ]}""";
 
     public EntityTemplateServiceImpl(EntityTemplateMapper templateMapper,

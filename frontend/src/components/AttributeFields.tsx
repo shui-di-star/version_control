@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { Form, Input, InputNumber, Select, DatePicker, Upload, Button, App } from 'antd';
-import { UploadOutlined } from '@ant-design/icons';
+import { Form, Input, InputNumber, Select, DatePicker, Upload, Button, App, Image } from 'antd';
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import type { SchemaField } from '@/types/api';
 import { attrImageApi } from '@/api/misc';
 
 // 按模板 field_schema 动态渲染 Form.Item。
-// IMAGE 类型：上传图片到独立的属性图片接口，存 objectKey 到 attributes JSON。
+// IMAGE 类型：上传图片到独立的属性图片接口，存 objectKey 数组到 attributes JSON。
 // 与产出物（Asset）完全独立。
 export default function AttributeFields({
   fields,
@@ -41,7 +41,7 @@ export default function AttributeFields({
             break;
           case 'IMAGE':
             control = (
-              <ImageAttrField
+              <MultiImageAttrField
                 disabled={disabled}
                 projectId={projectId}
               />
@@ -60,27 +60,36 @@ export default function AttributeFields({
   );
 }
 
-/** IMAGE 属性字段：受控组件，value/onChange 为 objectKey 字符串。 */
-function ImageAttrField({
+/** 将旧格式单字符串或新格式数组统一转为 string[] */
+function normalizeImageValue(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((v) => typeof v === 'string' && v.trim());
+  if (typeof value === 'string' && value.trim()) return [value];
+  return [];
+}
+
+/** 多图 IMAGE 属性字段：受控组件，value/onChange 支持 string[] | string。 */
+function MultiImageAttrField({
   value,
   onChange,
   disabled,
   projectId,
 }: {
-  value?: string;
-  onChange?: (v: string | undefined) => void;
+  value?: string[] | string;
+  onChange?: (v: string[]) => void;
   disabled?: boolean;
   projectId?: string;
 }) {
   const { message } = App.useApp();
   const [uploading, setUploading] = useState(false);
 
+  const images = normalizeImageValue(value);
+
   const handleUpload = async (file: File) => {
     if (!projectId) return;
     setUploading(true);
     try {
       const res = await attrImageApi.upload(projectId, file);
-      onChange?.(res.objectKey);
+      onChange?.([...images, res.objectKey]);
       message.success('图片已上传');
     } catch {
       message.error('图片上传失败');
@@ -89,26 +98,53 @@ function ImageAttrField({
     }
   };
 
+  const handleRemove = (idx: number) => {
+    const next = images.filter((_, i) => i !== idx);
+    onChange?.(next);
+  };
+
   return (
     <div>
-      {value && projectId && (
-        <img
-          src={attrImageApi.previewUrl(projectId, value)}
-          alt="预览"
-          style={{ maxWidth: '100%', maxHeight: 200, borderRadius: 6, marginBottom: 8, display: 'block' }}
-        />
+      {images.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8, marginBottom: 8 }}>
+          {images.map((key, idx) => (
+            <div key={key} style={{ position: 'relative', border: '1px solid #e8e8e8', borderRadius: 6, overflow: 'hidden' }}>
+              <Image
+                src={projectId ? attrImageApi.previewUrl(projectId, key) : undefined}
+                alt={`图片${idx + 1}`}
+                style={{ width: '100%', aspectRatio: '1', objectFit: 'cover' }}
+                preview={{ mask: '预览' }}
+              />
+              {!disabled && (
+                <Button
+                  type="text"
+                  danger
+                  size="small"
+                  icon={<DeleteOutlined />}
+                  onClick={() => handleRemove(idx)}
+                  style={{
+                    position: 'absolute', top: 2, right: 2,
+                    background: 'rgba(255,255,255,0.85)', borderRadius: 4,
+                    width: 22, height: 22, padding: 0,
+                  }}
+                />
+              )}
+            </div>
+          ))}
+        </div>
       )}
       {!disabled && projectId ? (
         <Upload
           showUploadList={false}
           accept="image/*"
+          multiple
           beforeUpload={(file) => {
             handleUpload(file);
             return false;
           }}
         >
-          <Button icon={<UploadOutlined />} loading={uploading} size="small">
-            {value ? '更换图片' : '上传图片'}
+          <Button icon={<PlusOutlined />} loading={uploading} size="small">
+            添加图片
           </Button>
         </Upload>
       ) : !projectId ? (
@@ -127,7 +163,14 @@ export function attrsToForm(
   for (const f of fields) {
     const v = attrs[f.key];
     if (v == null) continue;
-    out[f.key] = f.type === 'DATE' ? dayjs(String(v)) : v;
+    if (f.type === 'DATE') {
+      out[f.key] = dayjs(String(v));
+    } else if (f.type === 'IMAGE') {
+      // 兼容旧数据：单字符串转数组
+      out[f.key] = normalizeImageValue(v);
+    } else {
+      out[f.key] = v;
+    }
   }
   return out;
 }
@@ -143,6 +186,10 @@ export function formToAttrs(
     if (v == null || v === '') continue;
     if (f.type === 'DATE' && dayjs.isDayjs(v)) {
       out[f.key] = (v as dayjs.Dayjs).format('YYYY-MM-DD');
+    } else if (f.type === 'IMAGE') {
+      // IMAGE 字段存为数组；空数组不存
+      const arr = normalizeImageValue(v);
+      if (arr.length > 0) out[f.key] = arr;
     } else {
       out[f.key] = v;
     }

@@ -58,7 +58,12 @@ public final class FieldSchema {
             String type = text(f, "type");
             // key 可由后端自动生成（前端不再显示 key 输入框）
             if (key == null || key.isBlank()) {
-                key = "f_" + UUID.randomUUID().toString().substring(0, 8);
+                // IMAGE 字段使用 img_ 前缀的稳定 key，避免改名后图片丢失
+                if ("IMAGE".equals(type)) {
+                    key = "img_" + UUID.randomUUID().toString().substring(0, 8);
+                } else {
+                    key = "f_" + UUID.randomUUID().toString().substring(0, 8);
+                }
             }
             if (label == null || label.isBlank()) {
                 throw new BusinessException(ResultCode.BAD_REQUEST, "字段 label 不能为空（key=" + key + "）");

@@ -64,7 +64,14 @@ public class AttributeValidator {
                 }
             }
             case "FILE", "IMAGE" -> {
-                require(value.isString(), key, "应为图片 objectKey 字符串");
+                // 支持单个 objectKey 字符串（旧数据）或数组（新数据）
+                if (value.isArray()) {
+                    for (JsonNode item : value) {
+                        require(item.isString(), key, "图片数组中每个元素应为 objectKey 字符串");
+                    }
+                } else {
+                    require(value.isString(), key, "应为图片 objectKey 字符串或数组");
+                }
             }
             default -> throw new BusinessException(ResultCode.BAD_REQUEST, "未知字段类型：" + field.type());
         }

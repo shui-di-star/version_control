@@ -22,6 +22,7 @@ import com.example.version_control_system.mapper.RelationMapper;
 import com.example.version_control_system.mapper.RelationTemplateMapper;
 import com.example.version_control_system.mapper.SimEntityMapper;
 import com.example.version_control_system.service.AttrImageRefService;
+import com.example.version_control_system.service.EdgeRemarkService;
 import com.example.version_control_system.service.EntityService;
 import com.example.version_control_system.service.StorageService;
 import org.springframework.stereotype.Service;
@@ -48,6 +49,7 @@ public class EntityServiceImpl implements EntityService {
     private final AttributeValidator attributeValidator;
     private final StorageService storageService;
     private final AttrImageRefService attrImageRefService;
+    private final EdgeRemarkService edgeRemarkService;
 
     public EntityServiceImpl(SimEntityMapper entityMapper,
                              EntityTemplateMapper templateMapper,
@@ -56,7 +58,8 @@ public class EntityServiceImpl implements EntityService {
                              AssetMapper assetMapper,
                              AttributeValidator attributeValidator,
                              StorageService storageService,
-                             AttrImageRefService attrImageRefService) {
+                             AttrImageRefService attrImageRefService,
+                             EdgeRemarkService edgeRemarkService) {
         this.entityMapper = entityMapper;
         this.templateMapper = templateMapper;
         this.relationMapper = relationMapper;
@@ -65,6 +68,7 @@ public class EntityServiceImpl implements EntityService {
         this.attributeValidator = attributeValidator;
         this.storageService = storageService;
         this.attrImageRefService = attrImageRefService;
+        this.edgeRemarkService = edgeRemarkService;
     }
 
     @Override
@@ -162,6 +166,9 @@ public class EntityServiceImpl implements EntityService {
             }
         }
         assetMapper.delete(new LambdaQueryWrapper<Asset>().in(Asset::getEntityId, entityIds));
+
+        // 清理连线备注及其图片
+        edgeRemarkService.deleteByEntityIds(entityIds);
 
         // 清理属性图片（存在 attributes JSON 中，路径以 p{pid}/attr/ 开头）
         List<SimEntity> entities = entityMapper.selectByIds(entityIds);

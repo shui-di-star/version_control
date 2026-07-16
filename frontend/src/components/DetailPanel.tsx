@@ -35,7 +35,15 @@ function DetailView({
   // 分类字段
   const keyMetricFields = fields.filter((f) => f.keyMetric);
   const imageFields = fields.filter((f) => f.type === 'IMAGE');
-  const otherFields = fields.filter((f) => !f.keyMetric && f.type !== 'IMAGE');
+  const conclusionField = fields.find((f) => f.key === 'conclusion_suggestion');
+  const otherFields = fields.filter((f) => !f.keyMetric && f.type !== 'IMAGE' && f.key !== 'conclusion_suggestion');
+
+  /** 将 IMAGE 属性值统一转为 objectKey 数组（兼容旧单字符串） */
+  const toImageArray = (val: unknown): string[] => {
+    if (Array.isArray(val)) return val.filter((v) => typeof v === 'string' && v.trim());
+    if (typeof val === 'string' && val.trim()) return [val];
+    return [];
+  };
 
   return (
     <div>
@@ -69,6 +77,46 @@ function DetailView({
         </section>
       )}
 
+      {/* 结论及建议（独立 section） */}
+      {conclusionField && (() => {
+        const val = attrs[conclusionField.key];
+        const text = val != null && val !== '' ? String(val) : '';
+        return text ? (
+          <section className="detail-section">
+            <h4>{conclusionField.label}</h4>
+            <div style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{text}</div>
+          </section>
+        ) : null;
+      })()}
+
+      {/* 图片字段 - 支持多图 + 点击放大 */}
+      {imageFields.length > 0 && (
+        <section className="detail-section">
+          <h4>图片</h4>
+          <div className="image-grid">
+            {imageFields.map((f) => {
+              const images = toImageArray(attrs[f.key]);
+              if (images.length === 0) return (
+                <div className="image-card" key={f.key}>
+                  <div className="image-meta">{f.label}</div>
+                  <div className="image-thumb-empty">暂无图片</div>
+                </div>
+              );
+              return images.map((objectKey, idx) => (
+                <div className="image-card" key={`${f.key}-${idx}`}>
+                  <div className="image-meta">{f.label}{images.length > 1 ? ` (${idx + 1})` : ''}</div>
+                  <Image
+                    src={attrImageApi.previewUrl(pid, objectKey)}
+                    alt={f.label}
+                    style={{ width: '100%', aspectRatio: '4/3', objectFit: 'contain', borderRadius: 6, background: '#fff' }}
+                  />
+                </div>
+              ));
+            })}
+          </div>
+        </section>
+      )}
+
       {/* 常规属性 */}
       {otherFields.length > 0 && (
         <section className="detail-section">
@@ -94,35 +142,6 @@ function DetailView({
                 <strong>{entity.remark}</strong>
               </div>
             )}
-          </div>
-        </section>
-      )}
-
-      {/* 图片字段 - 支持点击放大 */}
-      {imageFields.length > 0 && (
-        <section className="detail-section">
-          <h4>图片</h4>
-          <div className="image-grid">
-            {imageFields.map((f) => {
-              const val = attrs[f.key];
-              const hasImage = val != null && val !== '' && String(val).trim() !== '';
-              if (!hasImage) return (
-                <div className="image-card" key={f.key}>
-                  <div className="image-meta">{f.label}</div>
-                  <div className="image-thumb-empty">暂无图片</div>
-                </div>
-              );
-              return (
-                <div className="image-card" key={f.key}>
-                  <div className="image-meta">{f.label}</div>
-                  <Image
-                    src={attrImageApi.previewUrl(pid, String(val))}
-                    alt={f.label}
-                    style={{ width: '100%', aspectRatio: '4/3', objectFit: 'contain', borderRadius: 6, background: '#fff' }}
-                  />
-                </div>
-              );
-            })}
           </div>
         </section>
       )}

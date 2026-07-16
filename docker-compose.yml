@@ -7,7 +7,7 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
     ports:
-      - "3307:3306"
+      - "3306:3306"
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
@@ -23,8 +23,8 @@ services:
     volumes:
       - minio_data:/data
     ports:
-      - "9100:9000"
-      - "9101:9001"
+      - "9000:9000"
+      - "9001:9001"
 
   app:
     build:
@@ -51,7 +51,7 @@ services:
     depends_on:
       - app
     ports:
-      - "8080:80"
+      - "80:80"
 
 volumes:
   mysql_data:
