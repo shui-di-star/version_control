@@ -174,16 +174,16 @@ export default function TreeViewPage() {
     if (!selectedEdgeFromSearch) return;
     const { sourceType, fromEntityId, toEntityId, relationId } = selectedEdgeFromSearch;
     // 查找节点名称
-    const findName = (nodes: typeof tree, id: string): string => {
+    const findName = (nodes: typeof tree, id: string): string | null => {
       for (const n of nodes) {
         if (n.id === id) return n.name;
         const found = findName(n.children ?? [], id);
-        if (found) return found;
+        if (found !== null) return found;
       }
-      return id;
+      return null;
     };
-    const sourceName = findName(tree, fromEntityId);
-    const targetName = findName(tree, toEntityId);
+    const sourceName = findName(tree, fromEntityId) ?? fromEntityId;
+    const targetName = findName(tree, toEntityId) ?? toEntityId;
 
     if (sourceType === 'PARENT_RELATION') {
       // 父子关系：从目标节点找 parentRelationTemplateId
@@ -313,16 +313,16 @@ export default function TreeViewPage() {
     if (!pid || !canWrite) return;
 
     // 查找节点名称
-    const findName = (nodes: typeof tree, id: string): string => {
+    const findName = (nodes: typeof tree, id: string): string | null => {
       for (const n of nodes) {
         if (String(n.id) === String(id)) return n.name;
         const found = findName(n.children ?? [], id);
-        if (found) return found;
+        if (found !== null) return found;
       }
-      return id;
+      return null;
     };
-    const sourceName = findName(tree, sourceId);
-    const targetName = findName(tree, targetId);
+    const sourceName = findName(tree, sourceId) ?? sourceId;
+    const targetName = findName(tree, targetId) ?? targetId;
 
     // 如果已在工具栏选好了关系模板，直接执行
     if (connectRelationTemplateId) {
